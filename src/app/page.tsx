@@ -59,11 +59,24 @@ const DEFAULT_ADVISORS: TeamMember[] = [
   { name: "Prof. Marcin Grabowski", img: "advisor-grabowski" },
 ];
 
+function resolveImgSrc(img: string): string {
+  if (!img) return "/img/placeholder.webp";
+  if (img.startsWith("http://") || img.startsWith("https://") || img.startsWith("/")) return img;
+  return `/img/${img}.webp`;
+}
+
 function TeamCard({ name, role_pl, role_en, img, type }: TeamMember & { type: "board" | "audit" | "advisor" }) {
+  const src = resolveImgSrc(img);
+  const isExternal = src.startsWith("http");
   return (
     <div className="team-card">
       <div className={`team-photo ${type}`}>
-        <Image src={`/img/${img}.webp`} alt={name} width={140} height={140} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        {isExternal ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt={name} width={140} height={140} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <Image src={src} alt={name} width={140} height={140} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        )}
       </div>
       <h4>{name}</h4>
       {role_pl && <p data-pl={role_pl} data-en={role_en || role_pl}>{role_pl}</p>}

@@ -15,26 +15,20 @@ CREATE TABLE IF NOT EXISTS public.site_content (
 
 ALTER TABLE public.site_content ENABLE ROW LEVEL SECURITY;
 
--- Anyone (including anonymous visitors) can read
-CREATE POLICY "site_content_select"
-  ON public.site_content FOR SELECT
-  USING (true);
-
--- Only admins can insert/update/delete
-CREATE POLICY "site_content_admin_insert"
-  ON public.site_content FOR INSERT
-  TO authenticated
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "site_content_admin_update"
-  ON public.site_content FOR UPDATE
-  TO authenticated
-  USING (public.is_admin());
-
-CREATE POLICY "site_content_admin_delete"
-  ON public.site_content FOR DELETE
-  TO authenticated
-  USING (public.is_admin());
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'site_content_select' AND tablename = 'site_content') THEN
+    CREATE POLICY "site_content_select" ON public.site_content FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'site_content_admin_insert' AND tablename = 'site_content') THEN
+    CREATE POLICY "site_content_admin_insert" ON public.site_content FOR INSERT TO authenticated WITH CHECK (public.is_admin());
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'site_content_admin_update' AND tablename = 'site_content') THEN
+    CREATE POLICY "site_content_admin_update" ON public.site_content FOR UPDATE TO authenticated USING (public.is_admin());
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'site_content_admin_delete' AND tablename = 'site_content') THEN
+    CREATE POLICY "site_content_admin_delete" ON public.site_content FOR DELETE TO authenticated USING (public.is_admin());
+  END IF;
+END $$;
 
 -- Auto-update updated_at
 CREATE OR REPLACE FUNCTION public.handle_site_content_updated()
@@ -45,6 +39,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS on_site_content_updated ON public.site_content;
 CREATE TRIGGER on_site_content_updated
   BEFORE UPDATE ON public.site_content
   FOR EACH ROW EXECUTE FUNCTION public.handle_site_content_updated();
@@ -169,7 +164,7 @@ INSERT INTO public.site_content (id, content) VALUES
   {"questionPl":"Czy SSK działa tylko w Warszawie?","questionEn":"Does SSK only operate in Warsaw?","answerPl":"Nie — SSK zrzesza studentów z ponad 15 uczelni medycznych z całej Polski. Spotkania online organizujemy regularnie, a warsztaty stacjonarne odbywają się w różnych miastach — m.in. Warszawie, Gdańsku i Wrocławiu.","answerEn":"No — SSK brings together students from over 15 medical universities across Poland. We organize regular online meetings, and in-person workshops take place in various cities — including Warsaw, Gdańsk, and Wrocław."},
   {"questionPl":"Jak często odbywają się wydarzenia?","questionEn":"How often do events take place?","answerPl":"Spotkania edukacyjne online organizujemy co miesiąc. Warsztaty praktyczne ECHO i EKG, szkoły letnie i konferencje — kilka razy w roku. Śledź nasz Facebook i Instagram, żeby nie przegapić terminów.","answerEn":"We hold educational online meetings monthly. Hands-on ECHO and ECG workshops, summer schools, and conferences take place several times a year. Follow our Facebook and Instagram to stay up to date."},
   {"questionPl":"Czy muszę studiować medycynę, żeby dołączyć?","questionEn":"Do I need to study medicine to join?","answerPl":"Nie. Zapraszamy studentów wszystkich kierunków medycznych i ścisłych — lekarskiego, pielęgniarstwa, fizjoterapii, biomedycyny, biotechnologii i wielu innych. Liczy się zainteresowanie kardiologią.","answerEn":"No. We welcome students from all medical and science fields — medicine, nursing, physiotherapy, biomedicine, biotechnology, and many more. What matters is your interest in cardiology."},
-  {"questionPl":"Jak się zapisać?","questionEn":"How do I sign up?","answerPl":"Wypełnij formularz zgłoszeniowy online (link w sekcji „Dołącz do nas"), opłać składkę członkowską (50 zł/rok) i czekaj na potwierdzenie. Cały proces zajmuje kilka minut.","answerEn":"Fill out the online application form (link in the ''Join Us'' section), pay the membership fee (50 PLN/year), and wait for confirmation. The whole process takes just a few minutes."}
+  {"questionPl":"Jak się zapisać?","questionEn":"How do I sign up?","answerPl":"Wypełnij formularz zg\u0142oszeniowy online (link w sekcji \u201EDo\u0142\u0105cz do nas\u201D), op\u0142a\u0107 sk\u0142adk\u0119 cz\u0142onkowsk\u0105 (50 z\u0142/rok) i czekaj na potwierdzenie. Ca\u0142y proces zajmuje kilka minut.","answerEn":"Fill out the online application form (link in the ''Join Us'' section), pay the membership fee (50 PLN/year), and wait for confirmation. The whole process takes just a few minutes."}
 ]'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
@@ -199,6 +194,29 @@ INSERT INTO public.site_content (id, content) VALUES
   {"href":"https://www.facebook.com/events/1607813013172743","img":"/img/event-1607813013172743.webp","alt":"Wiosenna Szkoła Kardiologiczna I","date":"16.03.2025","titlePl":"Wiosenna Szkoła Kardiologiczna — I Edycja","titleEn":"Spring Cardiology School — 1st Edition","metaPl":"Warszawa · Centrum Symulacji WUM","metaEn":"Warsaw · WUM Simulation Center"}
 ]'::jsonb)
 ON CONFLICT (id) DO NOTHING;
+
+-- ═══════════════════════════════════════════════════════════
+-- 9. STORAGE BUCKET FOR TEAM PHOTOS
+-- ═══════════════════════════════════════════════════════════
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('team-photos', 'team-photos', true)
+ON CONFLICT (id) DO NOTHING;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'team_photos_public_read' AND tablename = 'objects') THEN
+    CREATE POLICY "team_photos_public_read" ON storage.objects FOR SELECT USING (bucket_id = 'team-photos');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'team_photos_admin_insert' AND tablename = 'objects') THEN
+    CREATE POLICY "team_photos_admin_insert" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'team-photos' AND public.is_admin());
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'team_photos_admin_update' AND tablename = 'objects') THEN
+    CREATE POLICY "team_photos_admin_update" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'team-photos' AND public.is_admin());
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'team_photos_admin_delete' AND tablename = 'objects') THEN
+    CREATE POLICY "team_photos_admin_delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'team-photos' AND public.is_admin());
+  END IF;
+END $$;
 
 -- ═══════════════════════════════════════════════════════════
 -- DONE! All landing page content is now in site_content.

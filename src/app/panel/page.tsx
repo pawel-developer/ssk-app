@@ -172,7 +172,7 @@ export default function MemberPanel() {
         {/* Header */}
         <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 4px 24px rgba(0,0,0,.08)", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-            <span style={{ fontSize: 40 }}>✅</span>
+            <span style={{ fontSize: 40 }}>{isExpired ? "⚠️" : "✅"}</span>
             <div>
               <h2 style={{ fontFamily: "var(--font-serif)", fontSize: 22, color: "#0f172a", margin: 0 }}>{name}</h2>
               <p style={{ color: "#64748b", fontSize: 14, margin: 0 }}>{profile.university || "—"}</p>

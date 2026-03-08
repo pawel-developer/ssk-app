@@ -56,13 +56,61 @@ function EventCard({ event }: { event: PastEvent }) {
   );
 }
 
+function UpcomingHighlight({ upcoming }: { upcoming: UpcomingEvent }) {
+  return (
+    <div className="event-highlight">
+      <div className="event-highlight-img">
+        <Image
+          src={upcoming.img || "/img/event1_wiosenna2-cover.webp"}
+          alt={upcoming.title || "Upcoming event"}
+          width={600} height={400}
+          style={{ width: "100%", height: "100%", objectFit: "contain", background: "#f0f2f5" }}
+        />
+      </div>
+      <div className="event-highlight-content">
+        <span className="event-badge upcoming"
+          data-pl={upcoming.badge_pl || "📅 Nadchodzące"}
+          data-en={upcoming.badge_en || "📅 Upcoming"}>
+          {upcoming.badge_pl || "📅 Nadchodzące"}
+        </span>
+        <h3>{upcoming.title || "Nadchodzące wydarzenie"}</h3>
+        <p className="event-meta">
+          <span data-pl={upcoming.date_pl || ""} data-en={upcoming.date_en || ""}>
+            {upcoming.date_pl || ""}
+          </span>
+        </p>
+        <p data-pl={upcoming.desc_pl || ""} data-en={upcoming.desc_en || ""}>
+          {upcoming.desc_pl || ""}
+        </p>
+        {upcoming.link && (
+          <a href={upcoming.link} target="_blank" rel="noopener" className="btn btn-primary"
+            data-pl={upcoming.btn_pl || "Zobacz na Facebooku"}
+            data-en={upcoming.btn_en || "View on Facebook"}>
+            {upcoming.btn_pl || "Zobacz na Facebooku"}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function EventsSection({ upcomingEvent, pastEvents }: {
-  upcomingEvent?: UpcomingEvent;
+  upcomingEvent?: UpcomingEvent | UpcomingEvent[];
   pastEvents?: PastEvent[];
 }) {
   const [showMore, setShowMore] = useState(false);
 
-  const upcoming = upcomingEvent && Object.keys(upcomingEvent).length > 0 ? upcomingEvent : DEFAULT_UPCOMING;
+  let upcomingList: UpcomingEvent[];
+  if (Array.isArray(upcomingEvent)) {
+    upcomingList = upcomingEvent.length > 0 ? upcomingEvent : [DEFAULT_UPCOMING];
+  } else if (upcomingEvent && Object.keys(upcomingEvent).length > 0) {
+    upcomingList = [upcomingEvent];
+  } else {
+    upcomingList = [DEFAULT_UPCOMING];
+  }
+  const validUpcoming = upcomingList.filter((ev) => ev.title || ev.link || ev.img);
+  if (validUpcoming.length === 0) validUpcoming.push(DEFAULT_UPCOMING);
+
   const allPast = pastEvents && pastEvents.length > 0 ? pastEvents : DEFAULT_PAST;
   const visibleCount = 3;
   const pastVisible = allPast.slice(0, visibleCount);
@@ -76,40 +124,9 @@ export default function EventsSection({ upcomingEvent, pastEvents }: {
           <h2 data-pl="Co się dzieje w SSK" data-en="What's happening at SSK">Co się dzieje w SSK</h2>
         </div>
 
-        {/* Upcoming highlight */}
-        <div className="event-highlight">
-          <div className="event-highlight-img">
-            <Image
-              src={upcoming.img || "/img/event1_wiosenna2-cover.webp"}
-              alt={upcoming.title || "Upcoming event"}
-              width={600} height={400}
-              style={{ width: "100%", height: "100%", objectFit: "contain", background: "#f0f2f5" }}
-            />
-          </div>
-          <div className="event-highlight-content">
-            <span className="event-badge upcoming"
-              data-pl={upcoming.badge_pl || "📅 Nadchodzące"}
-              data-en={upcoming.badge_en || "📅 Upcoming"}>
-              {upcoming.badge_pl || "📅 Nadchodzące"}
-            </span>
-            <h3>{upcoming.title || "Nadchodzące wydarzenie"}</h3>
-            <p className="event-meta">
-              <span data-pl={upcoming.date_pl || ""} data-en={upcoming.date_en || ""}>
-                {upcoming.date_pl || ""}
-              </span>
-            </p>
-            <p data-pl={upcoming.desc_pl || ""} data-en={upcoming.desc_en || ""}>
-              {upcoming.desc_pl || ""}
-            </p>
-            {upcoming.link && (
-              <a href={upcoming.link} target="_blank" rel="noopener" className="btn btn-primary"
-                data-pl={upcoming.btn_pl || "Zobacz na Facebooku"}
-                data-en={upcoming.btn_en || "View on Facebook"}>
-                {upcoming.btn_pl || "Zobacz na Facebooku"}
-              </a>
-            )}
-          </div>
-        </div>
+        {validUpcoming.map((ev, i) => (
+          <UpcomingHighlight key={i} upcoming={ev} />
+        ))}
 
         {/* Past events */}
         <h3 className="events-subtitle" data-pl="Poprzednie wydarzenia" data-en="Past events">Poprzednie wydarzenia</h3>

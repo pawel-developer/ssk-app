@@ -52,6 +52,9 @@ export default function AdminPanel() {
   const [importModal, setImportModal] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; updated: number; skipped: number; errors: string[] } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [copiedEmails, setCopiedEmails] = useState(false);
+  const [sortKey, setSortKey] = useState<string>("last_name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const supabase = createClient();
@@ -159,6 +162,26 @@ export default function AdminPanel() {
     loadData();
   };
 
+  const handleDelete = async (member: Profile) => {
+    const name = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email;
+    if (!confirm(`Czy na pewno chcesz usunąć członka "${name}"?\n\nTa operacja jest nieodwracalna — konto i profil zostaną trwale usunięte.`)) return;
+
+    setActionLoading(member.id);
+    const res = await fetch("/api/members/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member_id: member.id }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert("Błąd: " + (data.error || "Nie udało się usunąć członka"));
+    }
+
+    setActionLoading(null);
+    loadData();
+  };
+
   const handleExport = () => {
     const headers = ["email", "first_name", "last_name", "phone", "university", "field_of_study", "year_of_study", "status", "join_date", "fee_active", "fee_valid_until", "last_payment_date"];
     const csvRows = [headers.join(",")];
@@ -213,6 +236,45 @@ export default function AdminPanel() {
     return matchSearch && matchFilter;
   });
 
+  const toggleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const sortedMembers = [...filteredMembers].sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    let valA: string | number | boolean | null = null;
+    let valB: string | number | boolean | null = null;
+
+    switch (sortKey) {
+      case "name":
+        valA = `${a.last_name ?? ""} ${a.first_name ?? ""}`.toLowerCase();
+        valB = `${b.last_name ?? ""} ${b.first_name ?? ""}`.toLowerCase();
+        break;
+      case "fee_status": {
+        const now = new Date();
+        const expA = !a.fee_active || (a.fee_valid_until && new Date(a.fee_valid_until) < now);
+        const expB = !b.fee_active || (b.fee_valid_until && new Date(b.fee_valid_until) < now);
+        valA = expA ? 1 : 0;
+        valB = expB ? 1 : 0;
+        break;
+      }
+      default:
+        valA = (a as unknown as Record<string, string | null>)[sortKey] ?? "";
+        valB = (b as unknown as Record<string, string | null>)[sortKey] ?? "";
+    }
+
+    if (valA == null) valA = "";
+    if (valB == null) valB = "";
+    if (valA < valB) return -1 * dir;
+    if (valA > valB) return 1 * dir;
+    return 0;
+  });
+
   if (loading || (!isAdmin && !error)) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9" }}>
@@ -235,7 +297,7 @@ export default function AdminPanel() {
   }
 
   const st = {
-    th: { background: "#f8fafc", padding: "12px 16px", textAlign: "left" as const, fontWeight: 600, color: "#475569", borderBottom: "2px solid #e2e8f0", whiteSpace: "nowrap" as const, fontSize: 13 },
+    th: { background: "#f8fafc", padding: "12px 16px", textAlign: "left" as const, fontWeight: 600, color: "#475569", borderBottom: "2px solid #e2e8f0", whiteSpace: "nowrap" as const, fontSize: 13, cursor: "pointer", userSelect: "none" as const },
     td: { padding: "10px 16px", borderBottom: "1px solid #f1f5f9", color: "#1e293b", fontSize: 14 },
     badge: (color: string, bg: string) => ({ display: "inline-block", padding: "4px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600, background: bg, color }),
     btn: (bg: string, color: string) => ({ padding: "6px 12px", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", background: bg, color, transition: "all .15s" }),
@@ -259,6 +321,7 @@ export default function AdminPanel() {
           <h1 style={{ fontSize: 20, color: "#0f172a", margin: 0 }}>Panel Admina SSK</h1>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={() => { setLoading(true); loadData(); }} style={st.btn("#0369a1", "#fff")}>Odśwież</button>
           <a href="/" style={{ ...st.btn("#e2e8f0", "#475569"), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Strona główna</a>
           <button onClick={handleLogout} style={st.btn("#dc2626", "#fff")}>Wyloguj</button>
         </div>
@@ -315,6 +378,14 @@ export default function AdminPanel() {
               <option value="expired">Wygasłe</option>
             </select>
             <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+              <button onClick={() => {
+                const activeEmails = members.filter((m) => m.fee_active).map((m) => m.email).filter(Boolean);
+                navigator.clipboard.writeText(activeEmails.join(", "));
+                setCopiedEmails(true);
+                setTimeout(() => setCopiedEmails(false), 2000);
+              }} style={st.btn("#16a34a", "#fff")}>
+                {copiedEmails ? "Skopiowano!" : `Kopiuj emaile aktywnych (${members.filter((m) => m.fee_active).length})`}
+              </button>
               <button onClick={handleExport} style={st.btn("#0369a1", "#fff")}>Eksport CSV</button>
               <button onClick={() => { setImportModal(true); setImportResult(null); }} style={st.btn("#7c3aed", "#fff")}>Import CSV</button>
             </div>
@@ -324,17 +395,23 @@ export default function AdminPanel() {
             <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.06)", fontSize: 14 }}>
               <thead>
                 <tr>
-                  <th style={st.th}>Imię i nazwisko</th>
-                  <th style={st.th}>Email</th>
-                  <th style={st.th}>Uczelnia</th>
-                  <th style={st.th}>Data dołączenia</th>
-                  <th style={st.th}>Składka</th>
-                  <th style={st.th}>Ważna do</th>
-                  <th style={st.th}>Akcje</th>
+                  {([
+                    { key: "name", label: "Imię i nazwisko" },
+                    { key: "email", label: "Email" },
+                    { key: "university", label: "Uczelnia" },
+                    { key: "join_date", label: "Data dołączenia" },
+                    { key: "fee_status", label: "Składka" },
+                    { key: "fee_valid_until", label: "Ważna do" },
+                  ] as const).map((col) => (
+                    <th key={col.key} style={st.th} onClick={() => toggleSort(col.key)}>
+                      {col.label} {sortKey === col.key ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                    </th>
+                  ))}
+                  <th style={{ ...st.th, cursor: "default" }}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredMembers.map((m) => {
+                {sortedMembers.map((m) => {
                   const expired = !m.fee_active || (m.fee_valid_until && new Date(m.fee_valid_until) < new Date());
                   return (
                     <tr key={m.id} style={{ cursor: "pointer" }} onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")} onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
@@ -348,13 +425,18 @@ export default function AdminPanel() {
                         </span>
                       </td>
                       <td style={st.td}>{m.fee_valid_until ? new Date(m.fee_valid_until).toLocaleDateString("pl-PL") : "—"}</td>
-                      <td style={st.td}>
-                        <button onClick={() => setEditing({ ...m })} style={st.btn("#2563eb", "#fff")}>Edytuj</button>
+                      <td style={{ ...st.td, whiteSpace: "nowrap" }}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => setEditing({ ...m })} style={st.btn("#2563eb", "#fff")}>Edytuj</button>
+                          <button onClick={() => handleDelete(m)} disabled={actionLoading === m.id} style={st.btn("#dc2626", "#fff")}>
+                            {actionLoading === m.id ? "..." : "Usuń"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
-                {filteredMembers.length === 0 && (
+                {sortedMembers.length === 0 && (
                   <tr><td colSpan={7} style={{ ...st.td, textAlign: "center", color: "#94a3b8" }}>Brak wyników</td></tr>
                 )}
               </tbody>

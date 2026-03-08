@@ -5,9 +5,11 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
 
   const {
-    email, password, first_name, last_name, phone,
-    university, field_of_study, year_of_study, status,
-    birth_date, address, citizenship, rodo_consent,
+    email, password, first_name, last_name, phone, pesel,
+    university, field_of_study, status,
+    birth_date, birth_place, address, citizenship,
+    studies_start_date, studies_end_date,
+    statute_consent, rodo_consent,
   } = body;
 
   if (!email || !password || !first_name || !last_name) {
@@ -17,9 +19,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (!pesel || !/^\d{11}$/.test(pesel)) {
+    return NextResponse.json(
+      { error: "PESEL musi zawierać 11 cyfr" },
+      { status: 400 }
+    );
+  }
+
   if (password.length < 6) {
     return NextResponse.json(
       { error: "Hasło musi mieć co najmniej 6 znaków" },
+      { status: 400 }
+    );
+  }
+
+  if (!statute_consent) {
+    return NextResponse.json(
+      { error: "Wymagana akceptacja Statutu SSK" },
       { status: 400 }
     );
   }
@@ -58,17 +74,21 @@ export async function POST(request: NextRequest) {
     first_name: first_name.trim(),
     last_name: last_name.trim(),
     phone: phone?.trim() || "",
+    pesel: pesel?.trim() || "",
     university: university?.trim() || "",
     field_of_study: field_of_study?.trim() || "",
-    year_of_study: year_of_study?.trim() || "",
-    status: status || "student",
+    status: status || "",
+    statute_consent: !!statute_consent,
     rodo_consent: !!rodo_consent,
     join_date: new Date().toISOString().split("T")[0],
   };
 
   if (birth_date) profileData.birth_date = birth_date;
+  if (birth_place) profileData.birth_place = birth_place.trim();
   if (address) profileData.address = address.trim();
   if (citizenship) profileData.citizenship = citizenship.trim();
+  if (studies_start_date) profileData.studies_start_date = studies_start_date;
+  if (studies_end_date) profileData.studies_end_date = studies_end_date;
 
   const { error: updateError } = await admin
     .from("profiles")
