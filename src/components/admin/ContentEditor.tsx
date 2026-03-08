@@ -11,32 +11,124 @@ interface FaqItem {
 }
 
 const s = {
-  card: { background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: 700 as const, color: "#0f172a", marginBottom: 12, cursor: "pointer", display: "flex" as const, justifyContent: "space-between" as const, alignItems: "center" as const },
-  fieldRow: { display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" as const },
-  fieldCol: { flex: 1, minWidth: 240 },
-  label: { display: "block", fontWeight: 600 as const, fontSize: 13, marginBottom: 4, color: "#475569" },
-  input: { width: "100%", padding: "8px 10px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const },
-  textarea: { width: "100%", padding: "8px 10px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const, minHeight: 60, resize: "vertical" as const },
-  btn: (bg: string, color: string) => ({ padding: "6px 12px", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600 as const, cursor: "pointer", background: bg, color }),
+  card: { background: "#fff", borderRadius: 10, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 12 },
+  sectionTitle: { fontSize: 14, fontWeight: 700 as const, color: "#0f172a", marginBottom: 8, cursor: "pointer", display: "flex" as const, justifyContent: "space-between" as const, alignItems: "center" as const },
+  label: { display: "block", fontWeight: 600 as const, fontSize: 12, marginBottom: 3, color: "#475569" },
+  input: { width: "100%", padding: "6px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const },
+  textarea: { width: "100%", padding: "6px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const, minHeight: 48, resize: "vertical" as const },
+  btn: (bg: string, color: string) => ({ padding: "4px 10px", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600 as const, cursor: "pointer", background: bg, color }),
 };
 
-function PairField({ label, valuePl, valueEn, onChangePl, onChangeEn, multiline }: {
+type TranslateContext = { section?: string; fieldLabel?: string; surroundingText?: string };
+
+async function translateText(
+  text: string,
+  from: string,
+  to: string,
+  context?: TranslateContext
+): Promise<string> {
+  const res = await fetch("/api/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, from, to, context }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Błąd tłumaczenia");
+  return data.translated || "";
+}
+
+/** Human-readable field label from key e.g. title_line1_pl -> Title line 1 */
+function fieldLabelFromKey(key: string): string {
+  const k = key.replace(/_pl$/, "").replace(/_en$/, "");
+  return k
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** Translate all PL→EN pairs in a record; returns new record with _en keys filled. Uses section context for better translation. */
+async function translateSection(
+  plEnPairs: { plKey: string; enKey: string }[],
+  getPl: (key: string) => string,
+  sectionName?: string
+): Promise<Record<string, string>> {
+  const updates: Record<string, string> = {};
+  const allPlValues = plEnPairs.map(({ plKey }) => (getPl(plKey) || "").trim()).filter(Boolean);
+  const surroundingSnippet = allPlValues.slice(0, 3).join(" | ");
+  for (const { plKey, enKey } of plEnPairs) {
+    const text = (getPl(plKey) || "").trim();
+    if (!text) continue;
+    try {
+      const context: TranslateContext = {
+        section: sectionName,
+        fieldLabel: fieldLabelFromKey(plKey),
+        surroundingText: surroundingSnippet.length > 200 ? surroundingSnippet.slice(0, 200) + "…" : surroundingSnippet,
+      };
+      const translated = await translateText(text, "pl", "en", context);
+      updates[enKey] = translated;
+    } catch {
+      // leave EN unchanged on error
+    }
+  }
+  return updates;
+}
+
+function PairField({ label, valuePl, valueEn, onChangePl, onChangeEn, multiline, section, editLang = "pl" }: {
   label: string; valuePl: string; valueEn: string;
   onChangePl: (v: string) => void; onChangeEn: (v: string) => void;
   multiline?: boolean;
+  section?: string;
+  editLang?: "pl" | "en";
 }) {
+  const [translating, setTranslating] = useState(false);
   const Input = multiline ? "textarea" : "input";
+  const isPl = editLang === "pl";
+  const value = isPl ? valuePl : valueEn;
+  const onChange = isPl ? onChangePl : onChangeEn;
+
+  const handleTranslate = async () => {
+    if (!valuePl.trim()) return;
+    setTranslating(true);
+    try {
+      const context: TranslateContext | undefined = section ? { section, fieldLabel: label } : undefined;
+      const translated = await translateText(valuePl, "pl", "en", context);
+      onChangeEn(translated);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Nie udało się przetłumaczyć");
+    } finally {
+      setTranslating(false);
+    }
+  };
+
   return (
-    <div style={s.fieldRow}>
-      <div style={s.fieldCol}>
-        <label style={s.label}>{label} (PL)</label>
-        <Input style={multiline ? s.textarea : s.input} value={valuePl} onChange={(e) => onChangePl(e.target.value)} />
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+        <label style={s.label}>{label}</label>
+        {!isPl && (
+          <button data-tip="Tłumacz PL→EN" type="button" onClick={handleTranslate} disabled={translating || !valuePl.trim()} style={{ ...s.btn("#e0f2fe", "#0369a1"), padding: "1px 6px", fontSize: 9 }}>
+            {translating ? "..." : "PL→EN"}
+          </button>
+        )}
       </div>
-      <div style={s.fieldCol}>
-        <label style={s.label}>{label} (EN)</label>
-        <Input style={multiline ? s.textarea : s.input} value={valueEn} onChange={(e) => onChangeEn(e.target.value)} />
-      </div>
+      <Input style={multiline ? s.textarea : s.input} value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function EditLangToggle({ lang, setLang, onTranslateAll, translating }: {
+  lang: "pl" | "en"; setLang: (l: "pl" | "en") => void;
+  onTranslateAll?: () => void; translating?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>Edycja:</span>
+      <button data-tip="Wersja PL" type="button" onClick={() => setLang("pl")} style={{ ...s.btn(lang === "pl" ? "#1e293b" : "#e2e8f0", lang === "pl" ? "#fff" : "#475569"), padding: "3px 10px" }}>PL</button>
+      <button data-tip="Wersja EN" type="button" onClick={() => setLang("en")} style={{ ...s.btn(lang === "en" ? "#1e293b" : "#e2e8f0", lang === "en" ? "#fff" : "#475569"), padding: "3px 10px" }}>EN</button>
+      {lang === "en" && onTranslateAll && (
+        <button data-tip="Tłumacz całość" type="button" onClick={onTranslateAll} disabled={translating} style={{ ...s.btn("#0369a1", "#fff"), padding: "3px 10px", fontSize: 11 }}>
+          {translating ? "Tłumaczę..." : "Przetłumacz wszystko PL→EN"}
+        </button>
+      )}
     </div>
   );
 }
@@ -45,7 +137,7 @@ function SingleField({ label, value, onChange, style: extraStyle }: {
   label: string; value: string; onChange: (v: string) => void; style?: React.CSSProperties;
 }) {
   return (
-    <div style={{ marginBottom: 12, ...extraStyle }}>
+    <div style={{ marginBottom: 8, ...extraStyle }}>
       <label style={s.label}>{label}</label>
       <input style={s.input} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
@@ -62,10 +154,196 @@ function CollapsibleSection({ title, children, defaultOpen }: {
         <span>{title}</span>
         <span style={{ fontSize: 14, color: "#94a3b8" }}>{open ? "▲" : "▼"}</span>
       </div>
-      {open && <div style={{ paddingTop: 8 }}>{children}</div>}
+      {open && <div style={{ paddingTop: 4 }}>{children}</div>}
     </div>
   );
 }
+
+const HERO_PL_EN_KEYS = [
+  { plKey: "title_line1_pl", enKey: "title_line1_en" },
+  { plKey: "title_line2_pl", enKey: "title_line2_en" },
+  { plKey: "title_line3_pl", enKey: "title_line3_en" },
+  { plKey: "subtitle_pl", enKey: "subtitle_en" },
+  { plKey: "btn1_pl", enKey: "btn1_en" },
+  { plKey: "btn2_pl", enKey: "btn2_en" },
+  { plKey: "stat1_pl", enKey: "stat1_en" },
+  { plKey: "stat2_pl", enKey: "stat2_en" },
+];
+
+const ABOUT_PL_EN_KEYS = [
+  { plKey: "tag_pl", enKey: "tag_en" },
+  { plKey: "title_pl", enKey: "title_en" },
+  { plKey: "desc_pl", enKey: "desc_en" },
+];
+
+const JOIN_PL_EN_KEYS = [
+  { plKey: "tag_pl", enKey: "tag_en" },
+  { plKey: "title_pl", enKey: "title_en" },
+  { plKey: "step1_title_pl", enKey: "step1_title_en" },
+  { plKey: "step1_desc_pl", enKey: "step1_desc_en" },
+  { plKey: "step1_btn_pl", enKey: "step1_btn_en" },
+  { plKey: "step2_title_pl", enKey: "step2_title_en" },
+  { plKey: "step2_desc_pl", enKey: "step2_desc_en" },
+  { plKey: "fee_title_pl", enKey: "fee_title_en" },
+  { plKey: "step3_title_pl", enKey: "step3_title_en" },
+  { plKey: "step3_desc_pl", enKey: "step3_desc_en" },
+  { plKey: "info_pl", enKey: "info_en" },
+];
+
+const COOP_PL_EN_KEYS = [
+  { plKey: "title_pl", enKey: "title_en" },
+  { plKey: "desc_pl", enKey: "desc_en" },
+  { plKey: "btn_pl", enKey: "btn_en" },
+];
+
+function HeroPreview({ hero, lang }: { hero: Record<string, string>; lang: "pl" | "en" }) {
+  const suf = lang === "pl" ? "_pl" : "_en";
+  const t = (key: string) => hero[key + suf] || hero[key] || "";
+  return (
+    <div
+      className="hero"
+      style={{ minHeight: 320, padding: "24px 16px", margin: 0 }}
+    >
+      <div className="hero-bg" />
+      <div className="hero-content" style={{ maxWidth: "100%" }}>
+        <h1 style={{ fontSize: "clamp(1.25rem, 3vw, 1.75rem)", marginBottom: 12 }}>
+          <span>{t("title_line1") || "—"}</span>
+          <br />
+          <span>{t("title_line2") || "—"}</span>
+          <br />
+          <span className="text-accent">{t("title_line3") || "—"}</span>
+        </h1>
+        <p className="hero-subtitle" style={{ fontSize: "0.85rem", marginBottom: 16 }}>
+          {t("subtitle") || "—"}
+        </p>
+        <div className="hero-buttons" style={{ marginBottom: 24 }}>
+          <span className="btn btn-primary" style={{ pointerEvents: "none" }}>{t("btn1") || "—"}</span>
+          <span className="btn btn-outline" style={{ pointerEvents: "none" }}>{t("btn2") || "—"}</span>
+        </div>
+        <div className="hero-stats" style={{ paddingTop: 16, gap: 16 }}>
+          <div className="stat">
+            <span className="stat-number">{hero.stat1_number || "—"}</span>
+            <span className="stat-label">{t("stat1") || "—"}</span>
+          </div>
+          <div className="stat-divider" />
+          <div className="stat">
+            <span className="stat-number">{hero.stat2_number || "—"}</span>
+            <span className="stat-label">{t("stat2") || "—"}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AboutPreview({ about, lang }: { about: Record<string, unknown>; lang: "pl" | "en" }) {
+  const suf = lang === "pl" ? "_pl" : "_en";
+  const t = (key: string) => (about[key + suf] as string) || (about[key] as string) || "";
+  const cards = (about.cards || []) as Array<Record<string, string>>;
+  return (
+    <div className="section about" style={{ padding: "20px 12px", margin: 0 }}>
+      <div className="section-header" style={{ marginBottom: 16 }}>
+        <span className="section-tag">{t("tag") || "—"}</span>
+        <h2 style={{ fontSize: "1.25rem", marginBottom: 8 }}>{t("title") || "—"}</h2>
+        <p className="section-desc about-mission" style={{ fontSize: "0.8rem" }}>{t("desc") || "—"}</p>
+      </div>
+      <div className="about-grid" style={{ display: "grid", gap: 10, gridTemplateColumns: `repeat(${Math.min(cards.length, 3)}, 1fr)` }}>
+        {cards.map((card: Record<string, string>, i: number) => (
+          <div key={i} className="about-card" style={{ padding: 10 }}>
+            <div className="about-icon" style={{ fontSize: "1.4rem" }}>{card.icon || "—"}</div>
+            <h3 style={{ fontSize: "0.8rem", marginBottom: 4 }}>{lang === "pl" ? (card.title_pl || "—") : (card.title_en || card.title_pl || "—")}</h3>
+            <p style={{ fontSize: "0.65rem", lineHeight: 1.4 }}>{lang === "pl" ? (card.desc_pl || "—") : (card.desc_en || card.desc_pl || "—")}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function JoinPreview({ join, lang }: { join: Record<string, string>; lang: "pl" | "en" }) {
+  const suf = lang === "pl" ? "_pl" : "_en";
+  const t = (key: string) => join[key + suf] || join[key] || "";
+  return (
+    <div className="section join" style={{ padding: "20px 12px", margin: 0 }}>
+      <div className="section-header" style={{ marginBottom: 12 }}>
+        <span className="section-tag">{t("tag") || "—"}</span>
+        <h2 style={{ fontSize: "1.25rem" }}>{t("title") || "—"}</h2>
+      </div>
+      <div className="join-content">
+        <div className="join-steps" style={{ gap: 12 }}>
+          <div className="join-step">
+            <div className="step-number" style={{ width: 28, height: 28, fontSize: "0.85rem" }}>1</div>
+            <div className="step-content">
+              <h3 style={{ fontSize: "0.9rem" }}>{t("step1_title") || "—"}</h3>
+              <p style={{ fontSize: "0.75rem" }}>{t("step1_desc") || "—"}</p>
+              <span className="btn btn-primary btn-sm" style={{ pointerEvents: "none" }}>{t("step1_btn") || "—"}</span>
+            </div>
+          </div>
+          <div className="join-step">
+            <div className="step-number" style={{ width: 28, height: 28, fontSize: "0.85rem" }}>2</div>
+            <div className="step-content">
+              <h3 style={{ fontSize: "0.9rem" }}>{t("step2_title") || "—"}</h3>
+              <p style={{ fontSize: "0.75rem" }}>{t("step2_desc") || "—"}</p>
+              <div style={{ fontSize: "0.7rem", marginTop: 4 }}><code>{join.account_number || "—"}</code></div>
+            </div>
+          </div>
+          <div className="join-step">
+            <div className="step-number" style={{ width: 28, height: 28, fontSize: "0.85rem" }}>3</div>
+            <div className="step-content">
+              <h3 style={{ fontSize: "0.9rem" }}>{t("step3_title") || "—"}</h3>
+              <p style={{ fontSize: "0.75rem" }}>{t("step3_desc") || "—"}</p>
+            </div>
+          </div>
+        </div>
+        <div className="join-info-box" style={{ marginTop: 12, padding: 8 }}>
+          <p style={{ fontSize: "0.75rem" }}>{t("info") || "—"}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CoopPreview({ coop, lang }: { coop: Record<string, string>; lang: "pl" | "en" }) {
+  const suf = lang === "pl" ? "_pl" : "_en";
+  const t = (key: string) => coop[key + suf] || coop[key] || "";
+  return (
+    <div className="section cooperation" style={{ padding: "20px 12px", margin: 0 }}>
+      <div className="coop-card" style={{ gridTemplateColumns: "1fr", padding: 16 }}>
+        <div className="coop-content" style={{ padding: 0 }}>
+          <h2 style={{ fontSize: "1.15rem", marginBottom: 8 }}>{t("title") || "—"}</h2>
+          <p style={{ fontSize: "0.8rem", marginBottom: 12 }}>{t("desc") || "—"}</p>
+          <span className="btn btn-primary" style={{ pointerEvents: "none" }}>{t("btn") || "—"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FaqPreview({ faq, lang }: { faq: FaqItem[]; lang: "pl" | "en" }) {
+  return (
+    <div className="section faq" style={{ padding: "20px 12px", margin: 0 }}>
+      <div className="section-header" style={{ marginBottom: 12 }}>
+        <span className="section-tag">FAQ</span>
+        <h2 style={{ fontSize: "1.25rem" }}>{lang === "pl" ? "Najczęściej zadawane pytania" : "Frequently Asked Questions"}</h2>
+      </div>
+      <div className="faq-list">
+        {faq.map((item, i) => (
+          <div key={i} className="faq-item" style={{ marginBottom: 6 }}>
+            <div className="faq-question" style={{ padding: "8px 12px", fontSize: "0.8rem", cursor: "default" }}>
+              {lang === "pl" ? (item.questionPl || "—") : (item.questionEn || item.questionPl || "—")}
+            </div>
+            <div className="faq-answer" style={{ maxHeight: "none" }}>
+              <p style={{ padding: "0 12px 8px", fontSize: "0.75rem" }}>
+                {lang === "pl" ? (item.answerPl || "—") : (item.answerEn || item.answerPl || "—")}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 
 const DEFAULT_HERO = {
   title_line1_pl: "Studenckie", title_line1_en: "Student",
@@ -141,6 +419,13 @@ export default function ContentEditor() {
   const [faq, setFaq] = useState<FaqItem[]>(DEFAULT_FAQ);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [heroTranslating, setHeroTranslating] = useState(false);
+  const [heroLang, setHeroLang] = useState<"pl" | "en">("pl");
+  const [aboutLang, setAboutLang] = useState<"pl" | "en">("pl");
+  const [joinLang, setJoinLang] = useState<"pl" | "en">("pl");
+  const [coopLang, setCoopLang] = useState<"pl" | "en">("pl");
+  const [faqLang, setFaqLang] = useState<"pl" | "en">("pl");
+  const [sectionTranslating, setSectionTranslating] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("site_content").select("*").in("id", [
@@ -198,13 +483,99 @@ export default function ContentEditor() {
     setFaq(items);
   };
 
+  const translateHeroSection = async () => {
+    setHeroTranslating(true);
+    try {
+      const updates = await translateSection(HERO_PL_EN_KEYS, (key) => hero[key] || "", "Hero");
+      setHero((prev: Record<string, string>) => ({ ...prev, ...updates }));
+      setMsg("Sekcja Hero: przetłumaczono PL→EN");
+      setTimeout(() => setMsg(""), 3000);
+    } catch (err) {
+      setMsg("Błąd: " + (err instanceof Error ? err.message : "Tłumaczenie nie powiodło się"));
+      setTimeout(() => setMsg(""), 4000);
+    } finally {
+      setHeroTranslating(false);
+    }
+  };
+
+  const translateSectionGeneric = async (
+    sectionId: string,
+    pairs: { plKey: string; enKey: string }[],
+    getPl: (key: string) => string,
+    setter: (updates: Record<string, string>) => void
+  ) => {
+    setSectionTranslating(sectionId);
+    try {
+      const updates = await translateSection(pairs, getPl, sectionId);
+      setter(updates);
+      setMsg(`Sekcja ${sectionId}: przetłumaczono PL→EN`);
+      setTimeout(() => setMsg(""), 3000);
+    } catch (err) {
+      setMsg("Błąd: " + (err instanceof Error ? err.message : "Tłumaczenie nie powiodło się"));
+      setTimeout(() => setMsg(""), 4000);
+    } finally {
+      setSectionTranslating(null);
+    }
+  };
+
+  const translateAboutSection = async () => {
+    setSectionTranslating("O nas");
+    try {
+      const updates = await translateSection(ABOUT_PL_EN_KEYS, (key) => about[key] || "", "O nas");
+      const cards = (about.cards || []) as Array<Record<string, string>>;
+      const cardsTranslated = await Promise.all(
+        cards.map(async (card, i) => {
+          const cardCtx: TranslateContext = { section: "O nas", fieldLabel: `Card ${i + 1} title` };
+          const titleEn = card.title_pl?.trim() ? await translateText(card.title_pl, "pl", "en", cardCtx).catch(() => card.title_en) : (card.title_en || "");
+          const descCtx: TranslateContext = { section: "O nas", fieldLabel: `Card ${i + 1} description` };
+          const descEn = card.desc_pl?.trim() ? await translateText(card.desc_pl, "pl", "en", descCtx).catch(() => card.desc_en) : (card.desc_en || "");
+          return { ...card, title_en: titleEn, desc_en: descEn };
+        })
+      );
+      setAbout((prev: Record<string, unknown>) => ({ ...prev, ...updates, cards: cardsTranslated }));
+      setMsg("Sekcja O nas: przetłumaczono PL→EN");
+      setTimeout(() => setMsg(""), 3000);
+    } catch (err) {
+      setMsg("Błąd: " + (err instanceof Error ? err.message : "Tłumaczenie nie powiodło się"));
+      setTimeout(() => setMsg(""), 4000);
+    } finally {
+      setSectionTranslating(null);
+    }
+  };
+
+  const translateFaqSection = async () => {
+    setSectionTranslating("faq");
+    try {
+      const faqContext: TranslateContext = { section: "FAQ" };
+      const translated = await Promise.all(
+        faq.map(async (item) => {
+          const questionEn = item.questionPl?.trim()
+            ? await translateText(item.questionPl, "pl", "en", { ...faqContext, fieldLabel: "Question" }).catch(() => item.questionEn)
+            : item.questionEn;
+          const answerEn = item.answerPl?.trim()
+            ? await translateText(item.answerPl, "pl", "en", { ...faqContext, fieldLabel: "Answer" }).catch(() => item.answerEn)
+            : item.answerEn;
+          return { ...item, questionEn, answerEn };
+        })
+      );
+      setFaq(translated);
+      setMsg("FAQ: przetłumaczono PL→EN");
+      setTimeout(() => setMsg(""), 3000);
+    } catch (err) {
+      setMsg("Błąd: " + (err instanceof Error ? err.message : "Tłumaczenie nie powiodło się"));
+      setTimeout(() => setMsg(""), 4000);
+    } finally {
+      setSectionTranslating(null);
+    }
+  };
+
   return (
     <div style={{ padding: "0 24px 24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-        <p style={{ color: "#64748b", fontSize: 14 }}>Edytuj treści strony głównej (PL + EN)</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <p style={{ color: "#64748b", fontSize: 13 }}>Edytuj treści strony głównej (PL + EN)</p>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {msg && <span style={{ fontSize: 13, color: msg.startsWith("Błąd") ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{msg}</span>}
-          <button onClick={saveAll} disabled={saving} style={s.btn("#16a34a", "#fff")}>
+          <button data-tip="Zapisz" onClick={saveAll} disabled={saving} style={s.btn("#16a34a", "#fff")}>
             {saving ? "Zapisywanie..." : "Zapisz wszystko"}
           </button>
         </div>
@@ -212,80 +583,126 @@ export default function ContentEditor() {
 
       {/* HERO */}
       <CollapsibleSection title="Sekcja Hero" defaultOpen>
-        <PairField label="Tytuł — linia 1" valuePl={hero.title_line1_pl || ""} valueEn={hero.title_line1_en || ""} onChangePl={hHero("title_line1_pl")} onChangeEn={hHero("title_line1_en")} />
-        <PairField label="Tytuł — linia 2" valuePl={hero.title_line2_pl || ""} valueEn={hero.title_line2_en || ""} onChangePl={hHero("title_line2_pl")} onChangeEn={hHero("title_line2_en")} />
-        <PairField label="Tytuł — linia 3 (accent)" valuePl={hero.title_line3_pl || ""} valueEn={hero.title_line3_en || ""} onChangePl={hHero("title_line3_pl")} onChangeEn={hHero("title_line3_en")} />
-        <PairField label="Podtytuł" valuePl={hero.subtitle_pl || ""} valueEn={hero.subtitle_en || ""} onChangePl={hHero("subtitle_pl")} onChangeEn={hHero("subtitle_en")} multiline />
-        <PairField label="Przycisk 1" valuePl={hero.btn1_pl || ""} valueEn={hero.btn1_en || ""} onChangePl={hHero("btn1_pl")} onChangeEn={hHero("btn1_en")} />
-        <PairField label="Przycisk 2" valuePl={hero.btn2_pl || ""} valueEn={hero.btn2_en || ""} onChangePl={hHero("btn2_pl")} onChangeEn={hHero("btn2_en")} />
-        <div style={s.fieldRow}>
-          <SingleField label="Statystyka 1 — liczba" value={hero.stat1_number || ""} onChange={hHero("stat1_number")} />
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <EditLangToggle lang={heroLang} setLang={setHeroLang} onTranslateAll={translateHeroSection} translating={heroTranslating} />
+            <PairField section="Hero" editLang={heroLang} label="Tytuł — linia 1" valuePl={hero.title_line1_pl || ""} valueEn={hero.title_line1_en || ""} onChangePl={hHero("title_line1_pl")} onChangeEn={hHero("title_line1_en")} />
+            <PairField section="Hero" editLang={heroLang} label="Tytuł — linia 2" valuePl={hero.title_line2_pl || ""} valueEn={hero.title_line2_en || ""} onChangePl={hHero("title_line2_pl")} onChangeEn={hHero("title_line2_en")} />
+            <PairField section="Hero" editLang={heroLang} label="Tytuł — linia 3 (accent)" valuePl={hero.title_line3_pl || ""} valueEn={hero.title_line3_en || ""} onChangePl={hHero("title_line3_pl")} onChangeEn={hHero("title_line3_en")} />
+            <PairField section="Hero" editLang={heroLang} label="Podtytuł" valuePl={hero.subtitle_pl || ""} valueEn={hero.subtitle_en || ""} onChangePl={hHero("subtitle_pl")} onChangeEn={hHero("subtitle_en")} multiline />
+            <PairField section="Hero" editLang={heroLang} label="Przycisk 1" valuePl={hero.btn1_pl || ""} valueEn={hero.btn1_en || ""} onChangePl={hHero("btn1_pl")} onChangeEn={hHero("btn1_en")} />
+            <PairField section="Hero" editLang={heroLang} label="Przycisk 2" valuePl={hero.btn2_pl || ""} valueEn={hero.btn2_en || ""} onChangePl={hHero("btn2_pl")} onChangeEn={hHero("btn2_en")} />
+            <SingleField label="Statystyka 1 — liczba" value={hero.stat1_number || ""} onChange={hHero("stat1_number")} />
+            <PairField section="Hero" editLang={heroLang} label="Statystyka 1 — etykieta" valuePl={hero.stat1_pl || ""} valueEn={hero.stat1_en || ""} onChangePl={hHero("stat1_pl")} onChangeEn={hHero("stat1_en")} />
+            <SingleField label="Statystyka 2 — liczba" value={hero.stat2_number || ""} onChange={hHero("stat2_number")} />
+            <PairField section="Hero" editLang={heroLang} label="Statystyka 2 — etykieta" valuePl={hero.stat2_pl || ""} valueEn={hero.stat2_en || ""} onChangePl={hHero("stat2_pl")} onChangeEn={hHero("stat2_en")} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0, position: "sticky", top: 16 }}>
+            <div style={{ borderRadius: 8, overflow: "hidden", boxShadow: "0 4px 12px rgba(0,0,0,.15)" }}>
+              <HeroPreview hero={hero} lang={heroLang} />
+            </div>
+          </div>
         </div>
-        <PairField label="Statystyka 1 — etykieta" valuePl={hero.stat1_pl || ""} valueEn={hero.stat1_en || ""} onChangePl={hHero("stat1_pl")} onChangeEn={hHero("stat1_en")} />
-        <div style={s.fieldRow}>
-          <SingleField label="Statystyka 2 — liczba" value={hero.stat2_number || ""} onChange={hHero("stat2_number")} />
-        </div>
-        <PairField label="Statystyka 2 — etykieta" valuePl={hero.stat2_pl || ""} valueEn={hero.stat2_en || ""} onChangePl={hHero("stat2_pl")} onChangeEn={hHero("stat2_en")} />
       </CollapsibleSection>
 
       {/* ABOUT */}
       <CollapsibleSection title="Sekcja O nas">
-        <PairField label="Tag" valuePl={about.tag_pl || ""} valueEn={about.tag_en || ""} onChangePl={hAbout("tag_pl")} onChangeEn={hAbout("tag_en")} />
-        <PairField label="Tytuł" valuePl={about.title_pl || ""} valueEn={about.title_en || ""} onChangePl={hAbout("title_pl")} onChangeEn={hAbout("title_en")} />
-        <PairField label="Opis" valuePl={about.desc_pl || ""} valueEn={about.desc_en || ""} onChangePl={hAbout("desc_pl")} onChangeEn={hAbout("desc_en")} multiline />
-        {(about.cards || []).map((card: Record<string, string>, i: number) => (
-          <div key={i} style={{ background: "#f8fafc", borderRadius: 8, padding: 12, marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 8 }}>Karta {i + 1}</div>
-            <SingleField label="Ikona (emoji)" value={card.icon || ""} onChange={(v) => updateAboutCard(i, "icon", v)} />
-            <PairField label="Tytuł karty" valuePl={card.title_pl || ""} valueEn={card.title_en || ""} onChangePl={(v) => updateAboutCard(i, "title_pl", v)} onChangeEn={(v) => updateAboutCard(i, "title_en", v)} />
-            <PairField label="Opis karty" valuePl={card.desc_pl || ""} valueEn={card.desc_en || ""} onChangePl={(v) => updateAboutCard(i, "desc_pl", v)} onChangeEn={(v) => updateAboutCard(i, "desc_en", v)} multiline />
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <EditLangToggle lang={aboutLang} setLang={setAboutLang} onTranslateAll={translateAboutSection} translating={sectionTranslating === "O nas"} />
+            <PairField section="O nas" editLang={aboutLang} label="Tag" valuePl={about.tag_pl || ""} valueEn={about.tag_en || ""} onChangePl={hAbout("tag_pl")} onChangeEn={hAbout("tag_en")} />
+            <PairField section="O nas" editLang={aboutLang} label="Tytuł" valuePl={about.title_pl || ""} valueEn={about.title_en || ""} onChangePl={hAbout("title_pl")} onChangeEn={hAbout("title_en")} />
+            <PairField section="O nas" editLang={aboutLang} label="Opis" valuePl={about.desc_pl || ""} valueEn={about.desc_en || ""} onChangePl={hAbout("desc_pl")} onChangeEn={hAbout("desc_en")} multiline />
+            {(about.cards || []).map((card: Record<string, string>, i: number) => (
+              <div key={i} style={{ background: "#f8fafc", borderRadius: 6, padding: 10, marginBottom: 6 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 6 }}>Karta {i + 1}</div>
+                <SingleField label="Ikona (emoji)" value={card.icon || ""} onChange={(v) => updateAboutCard(i, "icon", v)} />
+                <PairField section="O nas" editLang={aboutLang} label="Tytuł karty" valuePl={card.title_pl || ""} valueEn={card.title_en || ""} onChangePl={(v) => updateAboutCard(i, "title_pl", v)} onChangeEn={(v) => updateAboutCard(i, "title_en", v)} />
+                <PairField section="O nas" editLang={aboutLang} label="Opis karty" valuePl={card.desc_pl || ""} valueEn={card.desc_en || ""} onChangePl={(v) => updateAboutCard(i, "desc_pl", v)} onChangeEn={(v) => updateAboutCard(i, "desc_en", v)} multiline />
+              </div>
+            ))}
           </div>
-        ))}
+          <div style={{ flex: 1, minWidth: 0, position: "sticky", top: 16 }}>
+            <div style={{ borderRadius: 8, overflow: "hidden", boxShadow: "0 4px 12px rgba(0,0,0,.1)", background: "var(--gray-50)" }}>
+              <AboutPreview about={about} lang={aboutLang} />
+            </div>
+          </div>
+        </div>
       </CollapsibleSection>
 
       {/* JOIN */}
       <CollapsibleSection title="Sekcja Dołącz">
-        <PairField label="Tag" valuePl={join.tag_pl || ""} valueEn={join.tag_en || ""} onChangePl={hJoin("tag_pl")} onChangeEn={hJoin("tag_en")} />
-        <PairField label="Tytuł" valuePl={join.title_pl || ""} valueEn={join.title_en || ""} onChangePl={hJoin("title_pl")} onChangeEn={hJoin("title_en")} />
-        <SingleField label="URL formularza zgłoszeniowego" value={join.form_url || ""} onChange={hJoin("form_url")} />
-        <PairField label="Krok 1 — tytuł" valuePl={join.step1_title_pl || ""} valueEn={join.step1_title_en || ""} onChangePl={hJoin("step1_title_pl")} onChangeEn={hJoin("step1_title_en")} />
-        <PairField label="Krok 1 — opis" valuePl={join.step1_desc_pl || ""} valueEn={join.step1_desc_en || ""} onChangePl={hJoin("step1_desc_pl")} onChangeEn={hJoin("step1_desc_en")} multiline />
-        <PairField label="Krok 1 — przycisk" valuePl={join.step1_btn_pl || ""} valueEn={join.step1_btn_en || ""} onChangePl={hJoin("step1_btn_pl")} onChangeEn={hJoin("step1_btn_en")} />
-        <PairField label="Krok 2 — tytuł" valuePl={join.step2_title_pl || ""} valueEn={join.step2_title_en || ""} onChangePl={hJoin("step2_title_pl")} onChangeEn={hJoin("step2_title_en")} />
-        <PairField label="Krok 2 — opis" valuePl={join.step2_desc_pl || ""} valueEn={join.step2_desc_en || ""} onChangePl={hJoin("step2_desc_pl")} onChangeEn={hJoin("step2_desc_en")} multiline />
-        <SingleField label="Numer konta" value={join.account_number || ""} onChange={hJoin("account_number")} />
-        <SingleField label="Odbiorca" value={join.recipient || ""} onChange={hJoin("recipient")} />
-        <SingleField label="Adres odbiorcy" value={join.recipient_address || ""} onChange={hJoin("recipient_address")} />
-        <PairField label="Tytuł przelewu" valuePl={join.fee_title_pl || ""} valueEn={join.fee_title_en || ""} onChangePl={hJoin("fee_title_pl")} onChangeEn={hJoin("fee_title_en")} />
-        <PairField label="Krok 3 — tytuł" valuePl={join.step3_title_pl || ""} valueEn={join.step3_title_en || ""} onChangePl={hJoin("step3_title_pl")} onChangeEn={hJoin("step3_title_en")} />
-        <PairField label="Krok 3 — opis" valuePl={join.step3_desc_pl || ""} valueEn={join.step3_desc_en || ""} onChangePl={hJoin("step3_desc_pl")} onChangeEn={hJoin("step3_desc_en")} multiline />
-        <SingleField label="Email kontaktowy" value={join.contact_email || ""} onChange={hJoin("contact_email")} />
-        <PairField label="Tekst informacyjny" valuePl={join.info_pl || ""} valueEn={join.info_en || ""} onChangePl={hJoin("info_pl")} onChangeEn={hJoin("info_en")} multiline />
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <EditLangToggle lang={joinLang} setLang={setJoinLang} onTranslateAll={() => translateSectionGeneric("Dołącz", JOIN_PL_EN_KEYS, (k) => join[k] || "", (updates) => setJoin((prev: Record<string, unknown>) => ({ ...prev, ...updates })))} translating={sectionTranslating === "Dołącz"} />
+            <PairField section="Dołącz" editLang={joinLang} label="Tag" valuePl={join.tag_pl || ""} valueEn={join.tag_en || ""} onChangePl={hJoin("tag_pl")} onChangeEn={hJoin("tag_en")} />
+            <PairField section="Dołącz" editLang={joinLang} label="Tytuł" valuePl={join.title_pl || ""} valueEn={join.title_en || ""} onChangePl={hJoin("title_pl")} onChangeEn={hJoin("title_en")} />
+            <SingleField label="URL formularza zgłoszeniowego" value={join.form_url || ""} onChange={hJoin("form_url")} />
+            <PairField section="Dołącz" editLang={joinLang} label="Krok 1 — tytuł" valuePl={join.step1_title_pl || ""} valueEn={join.step1_title_en || ""} onChangePl={hJoin("step1_title_pl")} onChangeEn={hJoin("step1_title_en")} />
+            <PairField section="Dołącz" editLang={joinLang} label="Krok 1 — opis" valuePl={join.step1_desc_pl || ""} valueEn={join.step1_desc_en || ""} onChangePl={hJoin("step1_desc_pl")} onChangeEn={hJoin("step1_desc_en")} multiline />
+            <PairField section="Dołącz" editLang={joinLang} label="Krok 1 — przycisk" valuePl={join.step1_btn_pl || ""} valueEn={join.step1_btn_en || ""} onChangePl={hJoin("step1_btn_pl")} onChangeEn={hJoin("step1_btn_en")} />
+            <PairField section="Dołącz" editLang={joinLang} label="Krok 2 — tytuł" valuePl={join.step2_title_pl || ""} valueEn={join.step2_title_en || ""} onChangePl={hJoin("step2_title_pl")} onChangeEn={hJoin("step2_title_en")} />
+            <PairField section="Dołącz" editLang={joinLang} label="Krok 2 — opis" valuePl={join.step2_desc_pl || ""} valueEn={join.step2_desc_en || ""} onChangePl={hJoin("step2_desc_pl")} onChangeEn={hJoin("step2_desc_en")} multiline />
+            <SingleField label="Numer konta" value={join.account_number || ""} onChange={hJoin("account_number")} />
+            <SingleField label="Odbiorca" value={join.recipient || ""} onChange={hJoin("recipient")} />
+            <SingleField label="Adres odbiorcy" value={join.recipient_address || ""} onChange={hJoin("recipient_address")} />
+            <PairField section="Dołącz" editLang={joinLang} label="Tytuł przelewu" valuePl={join.fee_title_pl || ""} valueEn={join.fee_title_en || ""} onChangePl={hJoin("fee_title_pl")} onChangeEn={hJoin("fee_title_en")} />
+            <PairField section="Dołącz" editLang={joinLang} label="Krok 3 — tytuł" valuePl={join.step3_title_pl || ""} valueEn={join.step3_title_en || ""} onChangePl={hJoin("step3_title_pl")} onChangeEn={hJoin("step3_title_en")} />
+            <PairField section="Dołącz" editLang={joinLang} label="Krok 3 — opis" valuePl={join.step3_desc_pl || ""} valueEn={join.step3_desc_en || ""} onChangePl={hJoin("step3_desc_pl")} onChangeEn={hJoin("step3_desc_en")} multiline />
+            <SingleField label="Email kontaktowy" value={join.contact_email || ""} onChange={hJoin("contact_email")} />
+            <PairField section="Dołącz" editLang={joinLang} label="Tekst informacyjny" valuePl={join.info_pl || ""} valueEn={join.info_en || ""} onChangePl={hJoin("info_pl")} onChangeEn={hJoin("info_en")} multiline />
+          </div>
+          <div style={{ flex: 1, minWidth: 0, position: "sticky", top: 16 }}>
+            <div style={{ borderRadius: 8, overflow: "hidden", boxShadow: "0 4px 12px rgba(0,0,0,.1)", background: "#fff" }}>
+              <JoinPreview join={join} lang={joinLang} />
+            </div>
+          </div>
+        </div>
       </CollapsibleSection>
 
       {/* COOPERATION */}
       <CollapsibleSection title="Sekcja Współpraca">
-        <PairField label="Tytuł" valuePl={coop.title_pl || ""} valueEn={coop.title_en || ""} onChangePl={hCoop("title_pl")} onChangeEn={hCoop("title_en")} />
-        <PairField label="Opis" valuePl={coop.desc_pl || ""} valueEn={coop.desc_en || ""} onChangePl={hCoop("desc_pl")} onChangeEn={hCoop("desc_en")} multiline />
-        <PairField label="Przycisk" valuePl={coop.btn_pl || ""} valueEn={coop.btn_en || ""} onChangePl={hCoop("btn_pl")} onChangeEn={hCoop("btn_en")} />
-        <SingleField label="Email" value={coop.email || ""} onChange={hCoop("email")} />
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <EditLangToggle lang={coopLang} setLang={setCoopLang} onTranslateAll={() => translateSectionGeneric("Współpraca", COOP_PL_EN_KEYS, (k) => coop[k] || "", (updates) => setCoop((prev: Record<string, unknown>) => ({ ...prev, ...updates })))} translating={sectionTranslating === "Współpraca"} />
+            <PairField section="Współpraca" editLang={coopLang} label="Tytuł" valuePl={coop.title_pl || ""} valueEn={coop.title_en || ""} onChangePl={hCoop("title_pl")} onChangeEn={hCoop("title_en")} />
+            <PairField section="Współpraca" editLang={coopLang} label="Opis" valuePl={coop.desc_pl || ""} valueEn={coop.desc_en || ""} onChangePl={hCoop("desc_pl")} onChangeEn={hCoop("desc_en")} multiline />
+            <PairField section="Współpraca" editLang={coopLang} label="Przycisk" valuePl={coop.btn_pl || ""} valueEn={coop.btn_en || ""} onChangePl={hCoop("btn_pl")} onChangeEn={hCoop("btn_en")} />
+            <SingleField label="Email" value={coop.email || ""} onChange={hCoop("email")} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0, position: "sticky", top: 16 }}>
+            <div style={{ borderRadius: 8, overflow: "hidden", boxShadow: "0 4px 12px rgba(0,0,0,.1)", background: "#fff" }}>
+              <CoopPreview coop={coop} lang={coopLang} />
+            </div>
+          </div>
+        </div>
       </CollapsibleSection>
 
       {/* FAQ */}
       <CollapsibleSection title="FAQ">
-        {faq.map((item, i) => (
-          <div key={i} style={{ background: "#f8fafc", borderRadius: 8, padding: 12, marginBottom: 8, position: "relative" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>Pytanie {i + 1}</span>
-              <button onClick={() => setFaq(faq.filter((_, j) => j !== i))} style={s.btn("#fee2e2", "#dc2626")}>Usuń</button>
-            </div>
-            <PairField label="Pytanie" valuePl={item.questionPl} valueEn={item.questionEn} onChangePl={(v) => updateFaq(i, "questionPl", v)} onChangeEn={(v) => updateFaq(i, "questionEn", v)} />
-            <PairField label="Odpowiedź" valuePl={item.answerPl} valueEn={item.answerEn} onChangePl={(v) => updateFaq(i, "answerPl", v)} onChangeEn={(v) => updateFaq(i, "answerEn", v)} multiline />
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <EditLangToggle lang={faqLang} setLang={setFaqLang} onTranslateAll={translateFaqSection} translating={sectionTranslating === "faq"} />
+            {faq.map((item, i) => (
+              <div key={i} style={{ background: "#f8fafc", borderRadius: 6, padding: 10, marginBottom: 6, position: "relative" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>Pytanie {i + 1}</span>
+                  <button data-tip="Usuń" onClick={() => setFaq(faq.filter((_, j) => j !== i))} style={s.btn("#fee2e2", "#dc2626")}>Usuń</button>
+                </div>
+                <PairField section="FAQ" editLang={faqLang} label="Pytanie" valuePl={item.questionPl} valueEn={item.questionEn} onChangePl={(v) => updateFaq(i, "questionPl", v)} onChangeEn={(v) => updateFaq(i, "questionEn", v)} />
+                <PairField section="FAQ" editLang={faqLang} label="Odpowiedź" valuePl={item.answerPl} valueEn={item.answerEn} onChangePl={(v) => updateFaq(i, "answerPl", v)} onChangeEn={(v) => updateFaq(i, "answerEn", v)} multiline />
+              </div>
+            ))}
+            <button data-tip="Nowe pytanie" onClick={() => setFaq([...faq, { questionPl: "", questionEn: "", answerPl: "", answerEn: "" }])} style={s.btn("#e0f2fe", "#0369a1")}>
+              + Dodaj pytanie
+            </button>
           </div>
-        ))}
-        <button onClick={() => setFaq([...faq, { questionPl: "", questionEn: "", answerPl: "", answerEn: "" }])} style={s.btn("#e0f2fe", "#0369a1")}>
-          + Dodaj pytanie
-        </button>
+          <div style={{ flex: 1, minWidth: 0, position: "sticky", top: 16 }}>
+            <div style={{ borderRadius: 8, overflow: "hidden", boxShadow: "0 4px 12px rgba(0,0,0,.1)", background: "#fff" }}>
+              <FaqPreview faq={faq} lang={faqLang} />
+            </div>
+          </div>
+        </div>
       </CollapsibleSection>
     </div>
   );

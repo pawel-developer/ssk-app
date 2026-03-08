@@ -23,6 +23,8 @@ interface Profile {
   fee_valid_until: string | null;
   last_payment_date: string | null;
   is_admin: boolean;
+  birth_date: string | null;
+  birth_place: string | null;
 }
 
 interface PaymentConfirmation {
@@ -92,13 +94,17 @@ export default function AdminPanel() {
 
       if (membersData) setMembers(membersData);
 
-      const { data: pendingData } = await supabase
-        .from("payment_confirmations")
-        .select("*, profiles(first_name, last_name, email)")
-        .eq("status", "pending")
-        .order("uploaded_at", { ascending: false });
-
-      if (pendingData) setPending(pendingData as PaymentConfirmation[]);
+      try {
+        const res = await fetch("/api/payments");
+        const paymentResult = await res.json();
+        if (res.ok && paymentResult.pending) {
+          setPending(paymentResult.pending as PaymentConfirmation[]);
+        } else {
+          console.error("Błąd ładowania potwierdzeń:", JSON.stringify(paymentResult));
+        }
+      } catch (err) {
+        console.error("Błąd fetch /api/payments:", err);
+      }
       setLoading(false);
     } catch (err: unknown) {
       setError("Nieoczekiwany błąd: " + (err instanceof Error ? err.message : String(err)));
@@ -115,21 +121,15 @@ export default function AdminPanel() {
 
   const handleConfirm = async (conf: PaymentConfirmation) => {
     setActionLoading(conf.id);
-    const { data: { user } } = await supabase.auth.getUser();
-    const now = new Date();
-    const validUntil = new Date(now);
-    validUntil.setFullYear(validUntil.getFullYear() + 1);
-
-    await supabase.from("payment_confirmations").update({
-      status: "confirmed", confirmed_by: user?.id, confirmed_at: now.toISOString(),
-    }).eq("id", conf.id);
-
-    await supabase.from("profiles").update({
-      fee_active: true,
-      fee_valid_until: validUntil.toISOString().split("T")[0],
-      last_payment_date: now.toISOString().split("T")[0],
-    }).eq("id", conf.member_id);
-
+    const res = await fetch("/api/payments/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation_id: conf.id, member_id: conf.member_id }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      alert("Błąd zatwierdzania: " + (data.error || "Nieznany błąd"));
+    }
     setActionLoading(null);
     loadData();
   };
@@ -137,7 +137,15 @@ export default function AdminPanel() {
   const handleReject = async (conf: PaymentConfirmation) => {
     const reason = prompt("Powód odrzucenia (opcjonalnie):");
     setActionLoading(conf.id);
-    await supabase.from("payment_confirmations").update({ status: "rejected", rejection_reason: reason || null }).eq("id", conf.id);
+    const res = await fetch("/api/payments/reject", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation_id: conf.id, reason: reason || null }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      alert("Błąd odrzucania: " + (data.error || "Nieznany błąd"));
+    }
     setActionLoading(null);
     loadData();
   };
@@ -182,23 +190,39 @@ export default function AdminPanel() {
     loadData();
   };
 
-  const handleExport = () => {
-    const headers = ["email", "first_name", "last_name", "phone", "university", "field_of_study", "year_of_study", "status", "join_date", "fee_active", "fee_valid_until", "last_payment_date"];
-    const csvRows = [headers.join(",")];
-    for (const m of members) {
-      const row = headers.map((h) => {
-        const val = String((m as unknown as Record<string, unknown>)[h] ?? "");
-        return val.includes(",") || val.includes('"') || val.includes("\n") ? `"${val.replace(/"/g, '""')}"` : val;
-      });
-      csvRows.push(row.join(","));
-    }
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const downloadCsv = (rows: string[][], filename: string) => {
+    const csvContent = rows.map((r) =>
+      r.map((val) =>
+        val.includes(",") || val.includes('"') || val.includes("\n") ? `"${val.replace(/"/g, '""')}"` : val
+      ).join(",")
+    ).join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ssk-czlonkowie-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExport = () => {
+    const headers = ["email", "first_name", "last_name", "phone", "university", "field_of_study", "year_of_study", "status", "join_date", "fee_active", "fee_valid_until", "last_payment_date"];
+    const rows = [headers, ...members.map((m) =>
+      headers.map((h) => String((m as unknown as Record<string, unknown>)[h] ?? ""))
+    )];
+    downloadCsv(rows, `ssk-czlonkowie-${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleExportBasic = () => {
+    const headers = ["Imię/imiona", "Nazwisko", "Data i miejsce urodzenia", "E-mail"];
+    const rows = [headers, ...members.map((m) => {
+      const rec = m as unknown as Record<string, string | null>;
+      const birthDate = rec.birth_date ? new Date(rec.birth_date).toLocaleDateString("pl-PL") : "";
+      const birthPlace = rec.birth_place || "";
+      const birthInfo = [birthDate, birthPlace].filter(Boolean).join(", ");
+      return [rec.first_name || "", rec.last_name || "", birthInfo, rec.email || ""];
+    })];
+    downloadCsv(rows, `ssk-czlonkowie-podstawowe-${new Date().toISOString().split("T")[0]}.csv`);
   };
 
   const handleImport = async () => {
@@ -321,9 +345,9 @@ export default function AdminPanel() {
           <h1 style={{ fontSize: 20, color: "#0f172a", margin: 0 }}>Panel Admina SSK</h1>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => { setLoading(true); loadData(); }} style={st.btn("#0369a1", "#fff")}>Odśwież</button>
-          <a href="/" style={{ ...st.btn("#e2e8f0", "#475569"), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Strona główna</a>
-          <button onClick={handleLogout} style={st.btn("#dc2626", "#fff")}>Wyloguj</button>
+          <button data-tip-b="Odśwież dane" onClick={() => { setLoading(true); loadData(); }} style={st.btn("#0369a1", "#fff")}>Odśwież</button>
+          <a data-tip-b="Idź na stronę" href="/" style={{ ...st.btn("#e2e8f0", "#475569"), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Strona główna</a>
+          <button data-tip-b="Wyloguj" onClick={handleLogout} style={st.btn("#dc2626", "#fff")}>Wyloguj</button>
         </div>
       </div>
 
@@ -378,7 +402,7 @@ export default function AdminPanel() {
               <option value="expired">Wygasłe</option>
             </select>
             <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              <button onClick={() => {
+              <button data-tip="Kopiuj emaile aktywnych" onClick={() => {
                 const activeEmails = members.filter((m) => m.fee_active).map((m) => m.email).filter(Boolean);
                 navigator.clipboard.writeText(activeEmails.join(", "));
                 setCopiedEmails(true);
@@ -386,8 +410,9 @@ export default function AdminPanel() {
               }} style={st.btn("#16a34a", "#fff")}>
                 {copiedEmails ? "Skopiowano!" : `Kopiuj emaile aktywnych (${members.filter((m) => m.fee_active).length})`}
               </button>
-              <button onClick={handleExport} style={st.btn("#0369a1", "#fff")}>Eksport CSV</button>
-              <button onClick={() => { setImportModal(true); setImportResult(null); }} style={st.btn("#7c3aed", "#fff")}>Import CSV</button>
+              <button data-tip="CSV: imię, nazwisko, email" onClick={handleExportBasic} style={st.btn("#0369a1", "#fff")}>Eksport podstawowy</button>
+              <button data-tip="CSV ze wszystkimi polami" onClick={handleExport} style={st.btn("#475569", "#fff")}>Eksport pełny CSV</button>
+              <button data-tip="Import z CSV" onClick={() => { setImportModal(true); setImportResult(null); }} style={st.btn("#7c3aed", "#fff")}>Import CSV</button>
             </div>
           </div>
 
@@ -427,8 +452,8 @@ export default function AdminPanel() {
                       <td style={st.td}>{m.fee_valid_until ? new Date(m.fee_valid_until).toLocaleDateString("pl-PL") : "—"}</td>
                       <td style={{ ...st.td, whiteSpace: "nowrap" }}>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => setEditing({ ...m })} style={st.btn("#2563eb", "#fff")}>Edytuj</button>
-                          <button onClick={() => handleDelete(m)} disabled={actionLoading === m.id} style={st.btn("#dc2626", "#fff")}>
+                          <button data-tip="Edytuj profil" onClick={() => setEditing({ ...m })} style={st.btn("#2563eb", "#fff")}>Edytuj</button>
+                          <button data-tip="Usuń konto" onClick={() => handleDelete(m)} disabled={actionLoading === m.id} style={st.btn("#dc2626", "#fff")}>
                             {actionLoading === m.id ? "..." : "Usuń"}
                           </button>
                         </div>
@@ -466,11 +491,11 @@ export default function AdminPanel() {
                     </p>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => handleDownload(c.file_url)} style={st.btn("#e2e8f0", "#475569")}>Pobierz</button>
-                    <button onClick={() => handleConfirm(c)} disabled={actionLoading === c.id} style={st.btn("#16a34a", "#fff")}>
+                    <button data-tip="Pobierz plik" onClick={() => handleDownload(c.file_url)} style={st.btn("#e2e8f0", "#475569")}>Pobierz</button>
+                    <button data-tip="Aktywuj składkę" onClick={() => handleConfirm(c)} disabled={actionLoading === c.id} style={st.btn("#16a34a", "#fff")}>
                       {actionLoading === c.id ? "..." : "Zatwierdź"}
                     </button>
-                    <button onClick={() => handleReject(c)} disabled={actionLoading === c.id} style={st.btn("#dc2626", "#fff")}>Odrzuć</button>
+                    <button data-tip="Odrzuć wpłatę" onClick={() => handleReject(c)} disabled={actionLoading === c.id} style={st.btn("#dc2626", "#fff")}>Odrzuć</button>
                   </div>
                 </div>
               ))}
@@ -538,8 +563,8 @@ export default function AdminPanel() {
               <input type="date" style={st.input} value={editing.last_payment_date || ""} onChange={(e) => setEditing({ ...editing, last_payment_date: e.target.value || null })} />
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setEditing(null)} style={st.btn("#e2e8f0", "#475569")}>Anuluj</button>
-              <button onClick={handleSaveEdit} disabled={actionLoading === editing.id} style={st.btn("#16a34a", "#fff")}>
+              <button data-tip="Anuluj" onClick={() => setEditing(null)} style={st.btn("#e2e8f0", "#475569")}>Anuluj</button>
+              <button data-tip="Zapisz zmiany" onClick={handleSaveEdit} disabled={actionLoading === editing.id} style={st.btn("#16a34a", "#fff")}>
                 {actionLoading === editing.id ? "Zapisywanie..." : "Zapisz"}
               </button>
             </div>
@@ -572,8 +597,8 @@ export default function AdminPanel() {
             )}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setImportModal(false)} style={st.btn("#e2e8f0", "#475569")}>Zamknij</button>
-              <button onClick={handleImport} disabled={importing} style={st.btn("#7c3aed", "#fff")}>
+              <button data-tip="Zamknij" onClick={() => setImportModal(false)} style={st.btn("#e2e8f0", "#475569")}>Zamknij</button>
+              <button data-tip="Importuj plik" onClick={handleImport} disabled={importing} style={st.btn("#7c3aed", "#fff")}>
                 {importing ? "Importowanie..." : "Importuj"}
               </button>
             </div>

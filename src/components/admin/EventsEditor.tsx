@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import ImageUploadWithResize from "./ImageUploadWithResize";
 
 interface PastEvent {
   href: string;
@@ -40,13 +41,15 @@ const DEFAULT_PAST: PastEvent[] = [
 ];
 
 const s = {
-  card: { background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 16 },
-  title: { fontSize: 16, fontWeight: 700 as const, color: "#0f172a", marginBottom: 16 },
-  label: { display: "block" as const, fontWeight: 600 as const, fontSize: 13, marginBottom: 4, color: "#475569" },
-  input: { width: "100%", padding: "8px 10px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const },
-  btn: (bg: string, color: string) => ({ padding: "6px 12px", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600 as const, cursor: "pointer", background: bg, color }),
-  row: { display: "flex" as const, gap: 12, marginBottom: 12 },
+  card: { background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 16 },
+  title: { fontSize: 16, fontWeight: 700 as const, color: "#0f172a", marginBottom: 12 },
+  label: { display: "block" as const, fontWeight: 600 as const, fontSize: 12, marginBottom: 3, color: "#475569" },
+  input: { width: "100%", padding: "6px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const },
+  btn: (bg: string, color: string) => ({ padding: "4px 10px", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600 as const, cursor: "pointer", background: bg, color }),
+  row: { display: "flex" as const, gap: 8, marginBottom: 8 },
   col: { flex: 1, minWidth: 0 },
+  eventsGrid: { display: "grid" as const, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 },
+  eventCard: { background: "#f8fafc", borderRadius: 8, padding: 12, minWidth: 0 },
 };
 
 async function fetchOG(url: string): Promise<{ title?: string; image?: string; date?: string } | null> {
@@ -67,83 +70,9 @@ function FbField({ label, value, onChange, placeholder }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string;
 }) {
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div style={{ marginBottom: 8 }}>
       <label style={s.label}>{label}</label>
       <input style={s.input} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-    </div>
-  );
-}
-
-function ImageUploadField({ label, value, onChange, supabase }: {
-  label: string; value: string; onChange: (v: string) => void;
-  supabase: ReturnType<typeof createClient>;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    const ext = file.name.split(".").pop()?.toLowerCase() || "webp";
-    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-    const { error } = await supabase.storage.from("event-images").upload(fileName, file, {
-      cacheControl: "3600",
-      upsert: false,
-    });
-
-    if (error) {
-      alert("Błąd przesyłania: " + error.message);
-      setUploading(false);
-      return;
-    }
-
-    const { data: urlData } = supabase.storage.from("event-images").getPublicUrl(fileName);
-    onChange(urlData.publicUrl);
-    setUploading(false);
-  };
-
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <label style={s.label}>{label}</label>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input
-          style={{ ...s.input, flex: 1 }}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="/img/event-cover.webp lub URL"
-        />
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleUpload(file);
-            e.target.value = "";
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          style={s.btn(uploading ? "#94a3b8" : "#7c3aed", "#fff")}
-        >
-          {uploading ? "..." : "Prześlij"}
-        </button>
-      </div>
-      {value && (
-        <div style={{ marginTop: 8 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={value}
-            alt="podgląd"
-            style={{ maxWidth: 200, maxHeight: 120, borderRadius: 8, objectFit: "cover", border: "1px solid #e2e8f0" }}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            onLoad={(e) => { (e.target as HTMLImageElement).style.display = "block"; }}
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -235,6 +164,23 @@ export default function EventsEditor() {
     }
   };
 
+  const movePastToUpcoming = (idx: number) => {
+    const ev = past[idx];
+    const upcomingEvent: UpcomingEvent = {
+      link: ev.href || "",
+      img: ev.img || "",
+      title: ev.titlePl || "",
+      date_pl: ev.date ? `${ev.date} · ${ev.metaPl || ""}`.trim() : (ev.metaPl || ""),
+      date_en: ev.date ? `${ev.date} · ${ev.metaEn || ""}`.trim() : (ev.metaEn || ""),
+      desc_pl: ev.metaPl || "",
+      desc_en: ev.metaEn || "",
+      badge_pl: "📅 Nadchodzące", badge_en: "📅 Upcoming",
+      btn_pl: "Zobacz na Facebooku", btn_en: "View on Facebook",
+    };
+    setUpcomingList((prev) => [...prev, upcomingEvent]);
+    setPast((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const fetchUpcomingOG = async (idx: number) => {
     const ev = upcomingList[idx];
     if (!ev.link) return;
@@ -320,7 +266,7 @@ export default function EventsEditor() {
         <p style={{ color: "#64748b", fontSize: 14 }}>Zarządzaj wydarzeniami na stronie głównej</p>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {msg && <span style={{ fontSize: 13, color: msg.startsWith("B") ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{msg}</span>}
-          <button onClick={save} disabled={saving} style={s.btn("#16a34a", "#fff")}>
+          <button onClick={save} disabled={saving} style={s.btn("#16a34a", "#fff")} data-tip="Zapisz">
             {saving ? "Zapisywanie..." : "Zapisz wszystko"}
           </button>
         </div>
@@ -330,50 +276,62 @@ export default function EventsEditor() {
       <div style={s.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h3 style={{ ...s.title, marginBottom: 0 }}>Nadchodzące wydarzenia ({upcomingList.length})</h3>
-          <button onClick={addUpcoming} style={s.btn("#16a34a", "#fff")}>+ Dodaj nadchodzące</button>
+          <button onClick={addUpcoming} style={s.btn("#16a34a", "#fff")} data-tip="Nowe wydarzenie">+ Dodaj nadchodzące</button>
         </div>
 
+        <div style={s.eventsGrid}>
         {upcomingList.map((ev, idx) => (
-          <div key={idx} style={{ background: "#f8fafc", borderRadius: 10, padding: 16, marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: "#0f172a" }}>
-                {ev.title || `Wydarzenie ${idx + 1}`}
+          <div key={idx} style={s.eventCard}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#0f172a", flex: 1, minWidth: 0 }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>{ev.title || `Wydarzenie ${idx + 1}`}</span>
               </div>
               <div style={{ display: "flex", gap: 4 }}>
-                <button onClick={() => moveUpcomingToPast(idx)} style={s.btn("#f59e0b", "#fff")} title="Przenieś do poprzednich">
+                <button onClick={() => moveUpcomingToPast(idx)} style={s.btn("#f59e0b", "#fff")} data-tip="Do poprzednich">
                   → Poprzednie
                 </button>
                 {upcomingList.length > 1 && (
-                  <button onClick={() => removeUpcoming(idx)} style={s.btn("#fee2e2", "#dc2626")}>Usuń</button>
+                  <button onClick={() => removeUpcoming(idx)} style={s.btn("#fee2e2", "#dc2626")} data-tip="Usuń">Usuń</button>
                 )}
               </div>
             </div>
             <FbField label="Link (Facebook)" value={ev.link || ""} onChange={(v) => updateUpcoming(idx, { link: v })} placeholder="https://www.facebook.com/events/..." />
-            <div style={{ marginBottom: 16 }}>
-              <button onClick={() => fetchUpcomingOG(idx)} disabled={fetchingUpcomingIdx === idx || !ev.link} style={s.btn("#1877F2", "#fff")}>
+            <div style={{ marginBottom: 8 }}>
+              <button onClick={() => fetchUpcomingOG(idx)} disabled={fetchingUpcomingIdx === idx || !ev.link} style={s.btn("#1877F2", "#fff")} data-tip="Pobierz z FB">
                 {fetchingUpcomingIdx === idx ? "Pobieranie..." : "Pobierz dane z Facebooka"}
               </button>
             </div>
             <FbField label="Tytuł" value={ev.title || ""} onChange={(v) => updateUpcoming(idx, { title: v })} />
             <FbField label="Data i miejsce" value={ev.date_pl || ""} onChange={(v) => updateUpcoming(idx, { date_pl: v, date_en: v })} placeholder="8 marca 2026 · Warszawa" />
             <FbField label="Krótki opis" value={ev.desc_pl || ""} onChange={(v) => updateUpcoming(idx, { desc_pl: v, desc_en: v })} />
-            <ImageUploadField label="Obraz" value={ev.img || ""} onChange={(v) => updateUpcoming(idx, { img: v })} supabase={supabase} />
+            <ImageUploadWithResize
+              label="Obraz"
+              value={ev.img || ""}
+              onChange={(v) => updateUpcoming(idx, { img: v })}
+              suggestedName={ev.title ? `event-${ev.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40)}` : undefined}
+              outputWidth={800}
+              outputHeight={450}
+              cropShape="rect"
+              aspect={16 / 9}
+            />
           </div>
         ))}
+        </div>
       </div>
 
       {/* Past events */}
       <div style={s.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h3 style={{ ...s.title, marginBottom: 0 }}>Poprzednie wydarzenia</h3>
-          <button onClick={addPastFromLink} style={s.btn("#1877F2", "#fff")}>
+          <button onClick={addPastFromLink} style={s.btn("#1877F2", "#fff")} data-tip="Dodaj z FB">
             + Dodaj z linku Facebook
           </button>
         </div>
 
+        <div style={s.eventsGrid}>
         {past.map((ev, i) => (
-          <div key={i} style={{ background: "#f8fafc", borderRadius: 10, padding: 16, marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div key={i} style={s.eventCard}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {ev.img && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -381,15 +339,16 @@ export default function EventsEditor() {
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                   />
                 )}
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: "#0f172a" }}>{ev.titlePl || "Nowe wydarzenie"}</div>
-                  <div style={{ fontSize: 12, color: "#94a3b8" }}>{ev.date}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis" }}>{ev.titlePl || "Nowe wydarzenie"}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>{ev.date}</div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 4 }}>
-                {i > 0 && <button onClick={() => { const a = [...past]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; setPast(a); }} style={s.btn("#e2e8f0", "#475569")}>↑</button>}
-                {i < past.length - 1 && <button onClick={() => { const a = [...past]; [a[i], a[i + 1]] = [a[i + 1], a[i]]; setPast(a); }} style={s.btn("#e2e8f0", "#475569")}>↓</button>}
-                <button onClick={() => setPast(past.filter((_, j) => j !== i))} style={s.btn("#fee2e2", "#dc2626")}>Usuń</button>
+                <button onClick={() => movePastToUpcoming(i)} style={s.btn("#16a34a", "#fff")} data-tip="Do nadchodzących">← Nadchodzące</button>
+                {i > 0 && <button onClick={() => { const a = [...past]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; setPast(a); }} style={s.btn("#e2e8f0", "#475569")} data-tip="W górę">↑</button>}
+                {i < past.length - 1 && <button onClick={() => { const a = [...past]; [a[i], a[i + 1]] = [a[i + 1], a[i]]; setPast(a); }} style={s.btn("#e2e8f0", "#475569")} data-tip="W dół">↓</button>}
+                <button onClick={() => setPast(past.filter((_, j) => j !== i))} style={s.btn("#fee2e2", "#dc2626")} data-tip="Usuń">Usuń</button>
               </div>
             </div>
 
@@ -397,8 +356,8 @@ export default function EventsEditor() {
               <div style={{ ...s.col, flex: 2 }}>
                 <FbField label="Link Facebook" value={ev.href} onChange={(v) => updatePast(i, "href", v)} placeholder="https://www.facebook.com/events/..." />
               </div>
-              <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12 }}>
-                <button onClick={() => fetchPastOG(i)} disabled={fetchingIdx === i || !ev.href} style={s.btn("#1877F2", "#fff")}>
+              <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 8 }}>
+                <button onClick={() => fetchPastOG(i)} disabled={fetchingIdx === i || !ev.href} style={s.btn("#1877F2", "#fff")} data-tip="Pobierz z FB">
                   {fetchingIdx === i ? "..." : "Pobierz"}
                 </button>
               </div>
@@ -412,11 +371,21 @@ export default function EventsEditor() {
               </div>
             </div>
             <FbField label="Miejsce / prowadzący" value={ev.metaPl} onChange={(v) => { const a = [...past]; a[i] = { ...a[i], metaPl: v, metaEn: v }; setPast(a); }} placeholder="Online · Prof. ..." />
-            <ImageUploadField label="Obraz" value={ev.img} onChange={(v) => updatePast(i, "img", v)} supabase={supabase} />
+            <ImageUploadWithResize
+              label="Obraz"
+              value={ev.img}
+              onChange={(v) => updatePast(i, "img", v)}
+              suggestedName={ev.titlePl ? `event-${ev.titlePl.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40)}` : undefined}
+              outputWidth={800}
+              outputHeight={450}
+              cropShape="rect"
+              aspect={16 / 9}
+            />
           </div>
         ))}
+        </div>
 
-        <button onClick={() => setPast([...past, { href: "", img: "", alt: "", date: "", titlePl: "", titleEn: "", metaPl: "", metaEn: "" }])} style={s.btn("#e0f2fe", "#0369a1")}>
+        <button onClick={() => setPast([...past, { href: "", img: "", alt: "", date: "", titlePl: "", titleEn: "", metaPl: "", metaEn: "" }])} style={{ ...s.btn("#e0f2fe", "#0369a1"), marginTop: 12 }} data-tip="Dodaj ręcznie">
           + Dodaj ręcznie
         </button>
       </div>
