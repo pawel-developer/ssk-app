@@ -12,6 +12,32 @@ interface TeamMember {
 
 const EMPTY_MEMBER: TeamMember = { name: "", role_pl: "", role_en: "", img: "" };
 
+const DEFAULT_BOARD: TeamMember[] = [
+  { name: "Adrian Bednarek", role_pl: "Prezes Zarządu Głównego", role_en: "President", img: "team-adrian" },
+  { name: "lek. Paweł Siuciak", role_pl: "Zastępca Prezesa", role_en: "Vice President", img: "team-pawel" },
+  { name: "lek. Marta Mazur", role_pl: "Sekretarz", role_en: "Secretary", img: "team-marta-m" },
+  { name: "lek. Marta Chamera", role_pl: "Skarbnik", role_en: "Treasurer", img: "team-marta-c" },
+  { name: "lek. Patryk Pindlowski", role_pl: "Członek Zarządu", role_en: "Board Member", img: "team-patryk" },
+  { name: "Emil Brociek", role_pl: "Członek Zarządu", role_en: "Board Member", img: "team-emil" },
+  { name: "Aniela Zaboklicka", role_pl: "Członek Zarządu", role_en: "Board Member", img: "team-aniela" },
+  { name: "Natan Adamów", role_pl: "Członek Zarządu", role_en: "Board Member", img: "team-natan" },
+];
+
+const DEFAULT_AUDIT: TeamMember[] = [
+  { name: "lek. Alicja Skrobucha", role_pl: "Przewodnicząca Komisji Rewizyjnej", role_en: "Chair of Audit Committee", img: "team-alicja" },
+  { name: "lek. Olga Wiśniewska", role_pl: "Członek Komisji Rewizyjnej", role_en: "Audit Committee Member", img: "team-olga" },
+  { name: "lek. Magdalena Synak", role_pl: "Członek Komisji Rewizyjnej", role_en: "Audit Committee Member", img: "team-magdalena" },
+];
+
+const DEFAULT_ADVISORS: TeamMember[] = [
+  { name: "Prof. Miłosz Jaguszewski", img: "advisor-jaguszewski" },
+  { name: "Prof. Mariusz Tomaniak", img: "advisor-tomaniak" },
+  { name: "Prof. Paweł Balsam", img: "advisor-balsam" },
+  { name: "Prof. Piotr Buszman", img: "advisor-buszman" },
+  { name: "Prof. Paweł Gąsior", img: "advisor-gasior" },
+  { name: "Prof. Marcin Grabowski", img: "advisor-grabowski" },
+];
+
 const s = {
   card: { background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 16 },
   groupTitle: { fontSize: 16, fontWeight: 700 as const, color: "#0f172a", marginBottom: 16 },
@@ -90,19 +116,22 @@ function TeamGroup({ title, contentKey, members, setMembers, showRole }: {
 
 export default function BoardEditor() {
   const supabase = createClient();
-  const [board, setBoard] = useState<TeamMember[]>([]);
-  const [audit, setAudit] = useState<TeamMember[]>([]);
-  const [advisors, setAdvisors] = useState<TeamMember[]>([]);
+  const [board, setBoard] = useState<TeamMember[]>(DEFAULT_BOARD);
+  const [audit, setAudit] = useState<TeamMember[]>(DEFAULT_AUDIT);
+  const [advisors, setAdvisors] = useState<TeamMember[]>(DEFAULT_ADVISORS);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("site_content").select("*").in("id", ["team_board", "team_audit", "team_advisors"]);
-    data?.forEach((row) => {
-      if (row.id === "team_board") setBoard(row.content as TeamMember[]);
-      if (row.id === "team_audit") setAudit(row.content as TeamMember[]);
-      if (row.id === "team_advisors") setAdvisors(row.content as TeamMember[]);
-    });
+    if (data && data.length > 0) {
+      data.forEach((row) => {
+        const arr = row.content as TeamMember[];
+        if (row.id === "team_board" && arr.length > 0) setBoard(arr);
+        if (row.id === "team_audit" && arr.length > 0) setAudit(arr);
+        if (row.id === "team_advisors" && arr.length > 0) setAdvisors(arr);
+      });
+    }
   }, [supabase]);
 
   useEffect(() => { load(); }, [load]);

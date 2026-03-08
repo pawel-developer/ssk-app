@@ -236,7 +236,7 @@ export default async function Home() {
                   <p data-pl={join.step1_desc_pl || "Kliknij poniższy przycisk i wypełnij formularz zgłoszeniowy — zajmie to tylko kilka minut."} data-en={join.step1_desc_en || "Click the button below and fill out the application form — it only takes a few minutes."}>
                     {join.step1_desc_pl || "Kliknij poniższy przycisk i wypełnij formularz zgłoszeniowy — zajmie to tylko kilka minut."}
                   </p>
-                  <a href={join.form_url || "https://docs.google.com/forms/d/e/1FAIpQLSeP44kdz7k6B0EET0rNrP9eBJX0y9uo4z8ScOpr2v7yngbg4Q/viewform"} target="_blank" rel="noopener" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}
+                  <a href={join.form_url || "/join"} className="btn btn-primary btn-sm" style={{ marginTop: 12 }}
                     data-pl={join.step1_btn_pl || "Otwórz formularz"} data-en={join.step1_btn_en || "Open form"}>
                     {join.step1_btn_pl || "Otwórz formularz"}
                   </a>
