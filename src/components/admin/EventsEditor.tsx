@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 
 interface PastEvent {
@@ -74,20 +74,101 @@ function FbField({ label, value, onChange, placeholder }: {
   );
 }
 
+function ImageUploadField({ label, value, onChange, supabase }: {
+  label: string; value: string; onChange: (v: string) => void;
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split(".").pop()?.toLowerCase() || "webp";
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    const { error } = await supabase.storage.from("event-images").upload(fileName, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+    if (error) {
+      alert("Błąd przesyłania: " + error.message);
+      setUploading(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("event-images").getPublicUrl(fileName);
+    onChange(urlData.publicUrl);
+    setUploading(false);
+  };
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label style={s.label}>{label}</label>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          style={{ ...s.input, flex: 1 }}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="/img/event-cover.webp lub URL"
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleUpload(file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          style={s.btn(uploading ? "#94a3b8" : "#7c3aed", "#fff")}
+        >
+          {uploading ? "..." : "Prześlij"}
+        </button>
+      </div>
+      {value && (
+        <div style={{ marginTop: 8 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={value}
+            alt="podgląd"
+            style={{ maxWidth: 200, maxHeight: 120, borderRadius: 8, objectFit: "cover", border: "1px solid #e2e8f0" }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            onLoad={(e) => { (e.target as HTMLImageElement).style.display = "block"; }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EventsEditor() {
   const supabase = createClient();
-  const [upcoming, setUpcoming] = useState<UpcomingEvent>(DEFAULT_UPCOMING);
+  const [upcomingList, setUpcomingList] = useState<UpcomingEvent[]>([DEFAULT_UPCOMING]);
   const [past, setPast] = useState<PastEvent[]>(DEFAULT_PAST);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
-  const [fetchingUpcoming, setFetchingUpcoming] = useState(false);
+  const [fetchingUpcomingIdx, setFetchingUpcomingIdx] = useState<number | null>(null);
   const [fetchingIdx, setFetchingIdx] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("site_content").select("*").in("id", ["events_upcoming", "events_past"]);
     if (data && data.length > 0) {
       data.forEach((row) => {
-        if (row.id === "events_upcoming") setUpcoming(row.content as UpcomingEvent);
+        if (row.id === "events_upcoming") {
+          const raw = row.content;
+          if (Array.isArray(raw)) {
+            if (raw.length > 0) setUpcomingList(raw as UpcomingEvent[]);
+          } else if (raw && typeof raw === "object") {
+            setUpcomingList([raw as UpcomingEvent]);
+          }
+        }
         if (row.id === "events_past") {
           const arr = row.content as PastEvent[];
           if (arr.length > 0) setPast(arr);
@@ -102,33 +183,74 @@ export default function EventsEditor() {
     setSaving(true);
     setMsg("");
     for (const item of [
-      { id: "events_upcoming", content: upcoming },
+      { id: "events_upcoming", content: upcomingList },
       { id: "events_past", content: past },
     ]) {
       const { error } = await supabase.from("site_content").upsert({ id: item.id, content: item.content });
-      if (error) { setMsg("B\u0142\u0105d: " + error.message); setSaving(false); return; }
+      if (error) { setMsg("Błąd: " + error.message); setSaving(false); return; }
     }
     setMsg("Zapisano!");
     setSaving(false);
     setTimeout(() => setMsg(""), 3000);
   };
 
-  const fetchUpcomingOG = async () => {
-    if (!upcoming.link) return;
-    setFetchingUpcoming(true);
-    const og = await fetchOG(upcoming.link);
-    if (og) {
-      setUpcoming((prev: UpcomingEvent) => ({
-        ...prev,
-        title: og.title || prev.title,
-        img: og.image || prev.img,
-        date_pl: og.date || prev.date_pl,
-      }));
+  const updateUpcoming = (idx: number, updates: Partial<UpcomingEvent>) => {
+    setUpcomingList((prev) => prev.map((ev, i) => i === idx ? { ...ev, ...updates } : ev));
+  };
+
+  const addUpcoming = () => {
+    setUpcomingList((prev) => [...prev, {
+      img: "", title: "", date_pl: "", date_en: "", desc_pl: "", desc_en: "",
+      badge_pl: "📅 Nadchodzące", badge_en: "📅 Upcoming",
+      link: "", btn_pl: "Zobacz na Facebooku", btn_en: "View on Facebook",
+    }]);
+  };
+
+  const removeUpcoming = (idx: number) => {
+    if (upcomingList.length <= 1) return;
+    setUpcomingList((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const moveUpcomingToPast = (idx: number) => {
+    const ev = upcomingList[idx];
+    const pastEvent: PastEvent = {
+      href: ev.link || "",
+      img: ev.img || "",
+      alt: ev.title || "",
+      date: ev.date_pl?.split("·")[0]?.trim() || "",
+      titlePl: ev.title || "",
+      titleEn: ev.title || "",
+      metaPl: ev.desc_pl || ev.date_pl || "",
+      metaEn: ev.desc_en || ev.date_en || "",
+    };
+    setPast((prev) => [pastEvent, ...prev]);
+    if (upcomingList.length > 1) {
+      setUpcomingList((prev) => prev.filter((_, i) => i !== idx));
     } else {
-      setMsg("Nie uda\u0142o si\u0119 pobra\u0107 danych z Facebooka");
+      setUpcomingList([{
+        img: "", title: "", date_pl: "", date_en: "", desc_pl: "", desc_en: "",
+        badge_pl: "📅 Nadchodzące", badge_en: "📅 Upcoming",
+        link: "", btn_pl: "Zobacz na Facebooku", btn_en: "View on Facebook",
+      }]);
+    }
+  };
+
+  const fetchUpcomingOG = async (idx: number) => {
+    const ev = upcomingList[idx];
+    if (!ev.link) return;
+    setFetchingUpcomingIdx(idx);
+    const og = await fetchOG(ev.link);
+    if (og) {
+      updateUpcoming(idx, {
+        title: og.title || ev.title,
+        img: og.image || ev.img,
+        date_pl: og.date || ev.date_pl,
+      });
+    } else {
+      setMsg("Nie udało się pobrać danych z Facebooka");
       setTimeout(() => setMsg(""), 3000);
     }
-    setFetchingUpcoming(false);
+    setFetchingUpcomingIdx(null);
   };
 
   const fetchPastOG = async (idx: number) => {
@@ -206,25 +328,38 @@ export default function EventsEditor() {
 
       {/* Upcoming */}
       <div style={s.card}>
-        <h3 style={s.title}>Nadchodzące wydarzenie</h3>
-        <FbField label="Link (Facebook)" value={upcoming.link || ""} onChange={(v) => setUpcoming({ ...upcoming, link: v })} placeholder="https://www.facebook.com/events/..." />
-        <div style={{ marginBottom: 16 }}>
-          <button onClick={fetchUpcomingOG} disabled={fetchingUpcoming || !upcoming.link} style={s.btn("#1877F2", "#fff")}>
-            {fetchingUpcoming ? "Pobieranie..." : "Pobierz dane z Facebooka"}
-          </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h3 style={{ ...s.title, marginBottom: 0 }}>Nadchodzące wydarzenia ({upcomingList.length})</h3>
+          <button onClick={addUpcoming} style={s.btn("#16a34a", "#fff")}>+ Dodaj nadchodzące</button>
         </div>
-        <FbField label="Tytuł" value={upcoming.title || ""} onChange={(v) => setUpcoming({ ...upcoming, title: v })} />
-        <FbField label="Data i miejsce" value={upcoming.date_pl || ""} onChange={(v) => setUpcoming({ ...upcoming, date_pl: v, date_en: v })} placeholder="8 marca 2026 · Warszawa" />
-        <FbField label="Krótki opis" value={upcoming.desc_pl || ""} onChange={(v) => setUpcoming({ ...upcoming, desc_pl: v, desc_en: v })} />
-        <FbField label="Ścieżka obrazu (lub URL)" value={upcoming.img || ""} onChange={(v) => setUpcoming({ ...upcoming, img: v })} placeholder="/img/event-cover.webp lub https://..." />
-        {upcoming.img && (
-          <div style={{ marginBottom: 12 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={upcoming.img} alt="podgląd" style={{ maxWidth: 300, maxHeight: 160, borderRadius: 8, objectFit: "cover", border: "1px solid #e2e8f0" }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
+
+        {upcomingList.map((ev, idx) => (
+          <div key={idx} style={{ background: "#f8fafc", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "#0f172a" }}>
+                {ev.title || `Wydarzenie ${idx + 1}`}
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => moveUpcomingToPast(idx)} style={s.btn("#f59e0b", "#fff")} title="Przenieś do poprzednich">
+                  → Poprzednie
+                </button>
+                {upcomingList.length > 1 && (
+                  <button onClick={() => removeUpcoming(idx)} style={s.btn("#fee2e2", "#dc2626")}>Usuń</button>
+                )}
+              </div>
+            </div>
+            <FbField label="Link (Facebook)" value={ev.link || ""} onChange={(v) => updateUpcoming(idx, { link: v })} placeholder="https://www.facebook.com/events/..." />
+            <div style={{ marginBottom: 16 }}>
+              <button onClick={() => fetchUpcomingOG(idx)} disabled={fetchingUpcomingIdx === idx || !ev.link} style={s.btn("#1877F2", "#fff")}>
+                {fetchingUpcomingIdx === idx ? "Pobieranie..." : "Pobierz dane z Facebooka"}
+              </button>
+            </div>
+            <FbField label="Tytuł" value={ev.title || ""} onChange={(v) => updateUpcoming(idx, { title: v })} />
+            <FbField label="Data i miejsce" value={ev.date_pl || ""} onChange={(v) => updateUpcoming(idx, { date_pl: v, date_en: v })} placeholder="8 marca 2026 · Warszawa" />
+            <FbField label="Krótki opis" value={ev.desc_pl || ""} onChange={(v) => updateUpcoming(idx, { desc_pl: v, desc_en: v })} />
+            <ImageUploadField label="Obraz" value={ev.img || ""} onChange={(v) => updateUpcoming(idx, { img: v })} supabase={supabase} />
           </div>
-        )}
+        ))}
       </div>
 
       {/* Past events */}
@@ -277,7 +412,7 @@ export default function EventsEditor() {
               </div>
             </div>
             <FbField label="Miejsce / prowadzący" value={ev.metaPl} onChange={(v) => { const a = [...past]; a[i] = { ...a[i], metaPl: v, metaEn: v }; setPast(a); }} placeholder="Online · Prof. ..." />
-            <FbField label="Obraz (ścieżka lub URL)" value={ev.img} onChange={(v) => updatePast(i, "img", v)} placeholder="/img/event-cover.webp" />
+            <ImageUploadField label="Obraz" value={ev.img} onChange={(v) => updatePast(i, "img", v)} supabase={supabase} />
           </div>
         ))}
 

@@ -162,6 +162,26 @@ export default function AdminPanel() {
     loadData();
   };
 
+  const handleDelete = async (member: Profile) => {
+    const name = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email;
+    if (!confirm(`Czy na pewno chcesz usunąć członka "${name}"?\n\nTa operacja jest nieodwracalna — konto i profil zostaną trwale usunięte.`)) return;
+
+    setActionLoading(member.id);
+    const res = await fetch("/api/members/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member_id: member.id }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert("Błąd: " + (data.error || "Nie udało się usunąć członka"));
+    }
+
+    setActionLoading(null);
+    loadData();
+  };
+
   const handleExport = () => {
     const headers = ["email", "first_name", "last_name", "phone", "university", "field_of_study", "year_of_study", "status", "join_date", "fee_active", "fee_valid_until", "last_payment_date"];
     const csvRows = [headers.join(",")];
@@ -301,6 +321,7 @@ export default function AdminPanel() {
           <h1 style={{ fontSize: 20, color: "#0f172a", margin: 0 }}>Panel Admina SSK</h1>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={() => { setLoading(true); loadData(); }} style={st.btn("#0369a1", "#fff")}>Odśwież</button>
           <a href="/" style={{ ...st.btn("#e2e8f0", "#475569"), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Strona główna</a>
           <button onClick={handleLogout} style={st.btn("#dc2626", "#fff")}>Wyloguj</button>
         </div>
@@ -404,8 +425,13 @@ export default function AdminPanel() {
                         </span>
                       </td>
                       <td style={st.td}>{m.fee_valid_until ? new Date(m.fee_valid_until).toLocaleDateString("pl-PL") : "—"}</td>
-                      <td style={st.td}>
-                        <button onClick={() => setEditing({ ...m })} style={st.btn("#2563eb", "#fff")}>Edytuj</button>
+                      <td style={{ ...st.td, whiteSpace: "nowrap" }}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => setEditing({ ...m })} style={st.btn("#2563eb", "#fff")}>Edytuj</button>
+                          <button onClick={() => handleDelete(m)} disabled={actionLoading === m.id} style={st.btn("#dc2626", "#fff")}>
+                            {actionLoading === m.id ? "..." : "Usuń"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
