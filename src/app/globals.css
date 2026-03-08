@@ -30,6 +30,71 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Tooltip (wyjaśnienia przy najechaniu) */
+[data-tooltip] { position: relative; }
+[data-tooltip]:hover::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  background: var(--gray-800);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 220px;
+  white-space: normal;
+  text-align: center;
+  border-radius: 6px;
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  pointer-events: none;
+  animation: tooltip-fade 0.15s ease;
+}
+[data-tooltip]:hover::after {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--gray-800);
+  z-index: 1000;
+  pointer-events: none;
+}
+[data-tip], [data-tip-b] { position: relative; }
+[data-tip]:hover::before, [data-tip-b]:hover::before {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 4px;
+  background: var(--gray-800);
+  color: white;
+  font-size: 7px;
+  font-weight: 400;
+  white-space: nowrap;
+  text-align: center;
+  border-radius: 3px;
+  z-index: 1000;
+  pointer-events: none;
+  animation: tooltip-fade 0.12s ease;
+}
+[data-tip]:hover::before { content: attr(data-tip); bottom: calc(100% + 3px); }
+[data-tip-b]:hover::before { content: attr(data-tip-b); top: calc(100% + 3px); }
+[data-tip]:hover::after, [data-tip-b]:hover::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 3px solid transparent;
+  z-index: 1000;
+  pointer-events: none;
+}
+[data-tip]:hover::after { bottom: calc(100% + 0px); border-top-color: var(--gray-800); }
+[data-tip-b]:hover::after { top: calc(100% + 0px); border-bottom-color: var(--gray-800); }
+@keyframes tooltip-fade { from { opacity: 0; } to { opacity: 1; } }
+
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 80px;
@@ -863,10 +928,10 @@ a { text-decoration: none; color: inherit; }
 .social-btn:hover svg { color: var(--white); }
 
 .footer-email {
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   color: var(--gray-400);
   transition: color var(--transition);
-  word-break: break-all;
+  white-space: nowrap;
 }
 .footer-email:hover { color: var(--red-light); }
 

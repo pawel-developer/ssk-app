@@ -73,7 +73,7 @@ export default function FAQ({ items }: { items?: FaqItem[] }) {
       <div className="container">
         <div className="section-header">
           <span className="section-tag">FAQ</span>
-          <h2 data-pl="Najcz\u0119\u015Bciej zadawane pytania" data-en="Frequently Asked Questions">
+          <h2 data-pl="Najczęściej zadawane pytania" data-en="Frequently Asked Questions">
             Najczęściej zadawane pytania
           </h2>
         </div>

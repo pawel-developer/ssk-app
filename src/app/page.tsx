@@ -90,6 +90,7 @@ export default async function Home() {
   const boardMembers = (content.team_board as TeamMember[] | undefined) || DEFAULT_BOARD;
   const auditMembers = (content.team_audit as TeamMember[] | undefined) || DEFAULT_AUDIT;
   const advisors = (content.team_advisors as TeamMember[] | undefined) || DEFAULT_ADVISORS;
+  const customTeamSections = (content.team_custom_sections as { id: string; title: string; showRole: boolean; members: TeamMember[] }[] | undefined) || [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hero: any = content.page_hero || {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -230,6 +231,17 @@ export default async function Home() {
               <TeamCard key={m.img} {...m} type="advisor" />
             ))}
           </div>
+
+          {customTeamSections.map((sec) => (
+            <div key={sec.id}>
+              <h3 className="team-section-title">{sec.title}</h3>
+              <div className="team-grid team-grid-3">
+                {sec.members.map((m, i) => (
+                  <TeamCard key={m.img || i} {...m} type={sec.showRole ? "board" : "advisor"} />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
