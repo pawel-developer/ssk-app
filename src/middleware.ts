@@ -13,7 +13,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
@@ -45,8 +45,14 @@ export async function middleware(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle();
 
+    // Admins stay on /login to see the panel choice screen
+    if (profile?.is_admin) {
+      return supabaseResponse;
+    }
+
+    // Regular members go straight to /panel
     const url = request.nextUrl.clone();
-    url.pathname = profile?.is_admin ? "/admin" : "/panel";
+    url.pathname = "/panel";
     return NextResponse.redirect(url);
   }
 

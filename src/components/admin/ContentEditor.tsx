@@ -67,17 +67,78 @@ function CollapsibleSection({ title, children, defaultOpen }: {
   );
 }
 
+const DEFAULT_HERO = {
+  title_line1_pl: "Studenckie", title_line1_en: "Student",
+  title_line2_pl: "Stowarzyszenie", title_line2_en: "Cardiology",
+  title_line3_pl: "Kardiologiczne", title_line3_en: "Association",
+  subtitle_pl: "Łączymy studentów wszystkich kierunków medycznych i ścisłych, połączonych wspólną pasją do kardiologii. Zrzeszamy osoby do 3 lat od ukończenia studiów.",
+  subtitle_en: "We unite students of all medical and science fields, connected by a shared passion for cardiology. Open to graduates up to 3 years after completing their studies.",
+  btn1_pl: "Dołącz do nas", btn1_en: "Join Us",
+  btn2_pl: "Dowiedz się więcej", btn2_en: "Learn more",
+  stat1_number: "200+", stat1_pl: "Członków", stat1_en: "Members",
+  stat2_number: "15+", stat2_pl: "Uczelni medycznych", stat2_en: "Medical universities",
+};
+
+const DEFAULT_ABOUT = {
+  tag_pl: "Kim jesteśmy", tag_en: "Who we are",
+  title_pl: "Więcej niż koło naukowe", title_en: "More than a student club",
+  desc_pl: "SSK to ogólnopolska sieć studentów, którzy nie czekają na dyplom, żeby zacząć robić rzeczy w kardiologii. Organizujemy to, czego brakuje na uczelniach — praktyczne warsztaty, dostęp do ekspertów i środowisko ludzi, którzy chcą więcej.",
+  desc_en: "SSK is a nationwide network of students who don\u2019t wait for a diploma to get involved in cardiology. We organize what universities lack \u2014 hands-on workshops, access to experts, and a community of people who want more.",
+  cards: [
+    { icon: "\uD83E\uDEC0", title_pl: "Ręce na ECHO i EKG", title_en: "Hands on ECHO & ECG", desc_pl: "Nie tylko teoria. Warsztaty echokardiografii, EKG, symulacje medyczne, cewnikowanie \u2014 uczysz się na sprzęcie, nie ze slajdów.", desc_en: "Not just theory. Echocardiography workshops, ECG, medical simulations, catheterization \u2014 you learn on real equipment, not from slides." },
+    { icon: "\uD83C\uDF0D", title_pl: "Sieć z 15+ uczelni", title_en: "Network from 15+ universities", desc_pl: "Studenci z WUM, GUMed, UJ, UM Wrocław i wielu innych. Szkoły letnie w Gdańsku, konferencje w Warszawie, spotkania online z całej Polski.", desc_en: "Students from WUM, GUMed, UJ, UM Wrocław and many more. Summer schools in Gdańsk, conferences in Warsaw, online meetings from across Poland." },
+    { icon: "\uD83C\uDF93", title_pl: "Eksperci jako mentorzy", title_en: "Experts as mentors", desc_pl: "Prof. Jaguszewski, prof. Balsam, prof. Buszman i inni \u2014 nasi opiekunowie merytoryczni to liderzy polskiej kardiologii, którzy prowadzą wykłady i warsztaty specjalnie dla nas.", desc_en: "Prof. Jaguszewski, Prof. Balsam, Prof. Buszman and others \u2014 our academic advisors are leaders of Polish cardiology who give lectures and workshops exclusively for us." },
+  ],
+};
+
+const DEFAULT_JOIN = {
+  tag_pl: "Członkostwo", tag_en: "Membership",
+  title_pl: "Dołącz do nas", title_en: "Join Us",
+  form_url: "/join",
+  step1_title_pl: "Wypełnij formularz", step1_title_en: "Fill out the form",
+  step1_desc_pl: "Kliknij poniższy przycisk i wypełnij formularz zgłoszeniowy \u2014 zajmie to tylko kilka minut.",
+  step1_desc_en: "Click the button below and fill out the application form \u2014 it only takes a few minutes.",
+  step1_btn_pl: "Otwórz formularz", step1_btn_en: "Open form",
+  step2_title_pl: "Opłać składkę", step2_title_en: "Pay membership fee",
+  step2_desc_pl: "Składka członkowska wynosi 50 zł rocznie.", step2_desc_en: "The annual membership fee is 50 PLN.",
+  account_number: "43 1600 1462 1710 3081 5000 0001",
+  recipient: "Studenckie Stowarzyszenie Kardiologiczne",
+  recipient_address: "ul. 1 Maja 6/61, 02-495 Warszawa",
+  fee_title_pl: "Składka członkowska Imię Nazwisko Uczelnia", fee_title_en: "Membership fee First-Name Last-Name University",
+  step3_title_pl: "Czekaj na potwierdzenie", step3_title_en: "Wait for confirmation",
+  step3_desc_pl: "Po zaksięgowaniu wpłaty i weryfikacji formularza otrzymasz potwierdzenie członkostwa. Jeśli masz pytania, napisz do nas:",
+  step3_desc_en: "After the payment is registered and your form is verified, you will receive membership confirmation. If you have questions, contact us:",
+  contact_email: "studenckiestowarzyszeniekardio@gmail.com",
+  info_pl: "Jeśli nie otrzymasz potwierdzenia w ciągu kilku dni, sprawdź folder spam lub napisz do nas na powyższy adres e-mail.",
+  info_en: "If you don\u2019t receive confirmation within a few days, check your spam folder or email us at the address above.",
+};
+
+const DEFAULT_COOP = {
+  title_pl: "Współpraca z SKN", title_en: "Cooperation with Student Scientific Circles",
+  desc_pl: "Studenckie Koła Naukowe mogą nawiązać z nami współpracę. Wypełnij formularze partnerskie i wyślij na nasz adres e-mail. Propozycja zostanie rozpatrzona na najbliższym posiedzeniu Zarządu Głównego.",
+  desc_en: "Student Scientific Circles can partner with us. Fill out the partnership forms and send them to our email. The proposal will be reviewed at the next Main Board meeting.",
+  btn_pl: "Skontaktuj się", btn_en: "Get in touch",
+  email: "studenckiestowarzyszeniekardio@gmail.com",
+};
+
+const DEFAULT_FAQ: FaqItem[] = [
+  { questionPl: "Dlaczego stowarzyszenie, a nie koło naukowe?", questionEn: "Why an association and not a scientific circle?", answerPl: "Stowarzyszenie daje nam niezależność prawną i możliwość działania międzyuczelnianego. Jako zarejestrowany podmiot w KRS, możemy formalnie współpracować z ośrodkami akademickimi, pozyskiwać sponsorów i organizować ogólnopolskie wydarzenia.", answerEn: "An association gives us legal independence and the ability to operate across universities. As a registered entity in the National Court Register (KRS), we can formally collaborate with academic centers, attract sponsors, and organize nationwide events." },
+  { questionPl: "Kto może dołączyć do SSK?", questionEn: "Who can join SSK?", answerPl: "Studenci wszystkich kierunków medycznych i ścisłych oraz osoby do 3 lat od ukończenia studiów. Nie musisz studiować medycyny \u2014 wystarczy pasja do kardiologii!", answerEn: "Students of all medical and science fields, and graduates up to 3 years after completing their studies. You don\u2019t have to study medicine \u2014 a passion for cardiology is enough!" },
+  { questionPl: "Ile kosztuje członkostwo?", questionEn: "How much does membership cost?", answerPl: "Roczna składka członkowska wynosi 50 zł. Zapewnia ona dostęp do wszystkich wydarzeń, warsztatów i materiałów edukacyjnych.", answerEn: "The annual membership fee is 50 PLN. It provides access to all events, workshops, and educational materials." },
+  { questionPl: "Jak się zapisać?", questionEn: "How do I sign up?", answerPl: "Wypełnij formularz zgłoszeniowy online (link w sekcji \u201EDołącz do nas\u201D), opłać składkę członkowską (50 zł/rok) i czekaj na potwierdzenie. Cały proces zajmuje kilka minut.", answerEn: "Fill out the online application form (link in the \u2018Join Us\u2019 section), pay the membership fee (50 PLN/year), and wait for confirmation. The whole process takes just a few minutes." },
+];
+
 export default function ContentEditor() {
   const supabase = createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [hero, setHero] = useState<any>({});
+  const [hero, setHero] = useState<any>(DEFAULT_HERO);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [about, setAbout] = useState<any>({});
+  const [about, setAbout] = useState<any>(DEFAULT_ABOUT);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [join, setJoin] = useState<any>({});
+  const [join, setJoin] = useState<any>(DEFAULT_JOIN);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [coop, setCoop] = useState<any>({});
-  const [faq, setFaq] = useState<FaqItem[]>([]);
+  const [coop, setCoop] = useState<any>(DEFAULT_COOP);
+  const [faq, setFaq] = useState<FaqItem[]>(DEFAULT_FAQ);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -85,13 +146,15 @@ export default function ContentEditor() {
     const { data } = await supabase.from("site_content").select("*").in("id", [
       "page_hero", "page_about", "page_join", "page_cooperation", "faq",
     ]);
-    data?.forEach((row) => {
-      if (row.id === "page_hero") setHero(row.content);
-      if (row.id === "page_about") setAbout(row.content);
-      if (row.id === "page_join") setJoin(row.content);
-      if (row.id === "page_cooperation") setCoop(row.content);
-      if (row.id === "faq") setFaq(row.content as FaqItem[]);
-    });
+    if (data && data.length > 0) {
+      data.forEach((row) => {
+        if (row.id === "page_hero") setHero(row.content);
+        if (row.id === "page_about") setAbout(row.content);
+        if (row.id === "page_join") setJoin(row.content);
+        if (row.id === "page_cooperation") setCoop(row.content);
+        if (row.id === "faq") setFaq(row.content as FaqItem[]);
+      });
+    }
   }, [supabase]);
 
   useEffect(() => { load(); }, [load]);

@@ -123,7 +123,7 @@ INSERT INTO public.site_content (id, content) VALUES
 ('page_join', '{
   "tag_pl":"Członkostwo","tag_en":"Membership",
   "title_pl":"Dołącz do nas","title_en":"Join Us",
-  "form_url":"https://docs.google.com/forms/d/e/1FAIpQLSeP44kdz7k6B0EET0rNrP9eBJX0y9uo4z8ScOpr2v7yngbg4Q/viewform",
+  "form_url":"/join",
   "step1_title_pl":"Wypełnij formularz","step1_title_en":"Fill out the form",
   "step1_desc_pl":"Kliknij poniższy przycisk i wypełnij formularz zgłoszeniowy — zajmie to tylko kilka minut.",
   "step1_desc_en":"Click the button below and fill out the application form — it only takes a few minutes.",

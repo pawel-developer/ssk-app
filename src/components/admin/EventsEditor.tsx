@@ -19,6 +19,28 @@ type UpcomingEvent = Record<string, any>;
 
 const EMPTY_PAST: PastEvent = { href: "", img: "", alt: "", date: "", titlePl: "", titleEn: "", metaPl: "", metaEn: "" };
 
+const DEFAULT_UPCOMING: UpcomingEvent = {
+  img: "/img/event1_wiosenna2-cover.webp",
+  title: "Wiosenna Szkoła Kardiologiczna \u2014 II Edycja",
+  date_pl: "8 marca 2026 \u00B7 8:30 \u00B7 Centrum Symulacji WUM, Warszawa",
+  date_en: "March 8, 2026 \u00B7 8:30 AM \u00B7 WUM Simulation Center, Warsaw",
+  desc_pl: "Całodniowe warsztaty umiejętności praktycznych. II edycja we współpracy ze SKN przy I Katedrze i Klinice Kardiologii WUM.",
+  desc_en: "Full-day hands-on skills workshops. 2nd edition in collaboration with the Student Scientific Circle at the 1st Department of Cardiology, WUM.",
+  badge_pl: "\uD83D\uDCC5 Nadchodzące", badge_en: "\uD83D\uDCC5 Upcoming",
+  link: "https://www.facebook.com/events/3237057496601991/",
+  btn_pl: "Zobacz na Facebooku", btn_en: "View on Facebook",
+};
+
+const DEFAULT_PAST: PastEvent[] = [
+  { href: "https://www.facebook.com/events/1600367001002973/", img: "/img/event2_lipidy-cover.webp", alt: "Zaburzenia lipidowe 2026", date: "23.02.2026", titlePl: "Wytyczne diagnostyki zaburzeń lipidowych 2026", titleEn: "Lipid Disorder Diagnostic Guidelines 2026", metaPl: "Online \u00B7 Prof. Maciej Banach", metaEn: "Online \u00B7 Prof. Maciej Banach" },
+  { href: "https://www.facebook.com/events/1180004167648593/", img: "/img/event3_zastawka-cover.webp", alt: "Zastawka aortalna", date: "27.01.2026", titlePl: "Zastawka aortalna \u2014 diagnostyka i leczenie zabiegowe", titleEn: "Aortic Valve \u2014 Diagnostics & Interventional Treatment", metaPl: "Online", metaEn: "Online" },
+  { href: "https://www.facebook.com/events/1776803796342665", img: "/img/event-1776803796342665.webp", alt: "Warsztaty Kardiologii Interwencyjnej", date: "24.01.2026", titlePl: "Warsztaty Kardiologii Interwencyjnej", titleEn: "Interventional Cardiology Workshops", metaPl: "Gdańsk \u00B7 SKN Hemodynamiki GUMed", metaEn: "Gdańsk \u00B7 SKN Hemodynamiki GUMed" },
+  { href: "https://www.facebook.com/events/2385544128564083", img: "/img/event-2385544128564083.webp", alt: "Amyloidoza serca", date: "08.12.2025", titlePl: "Amyloidoza serca \u2014 cichy kameleon w kardiologii", titleEn: "Cardiac Amyloidosis \u2014 The Silent Chameleon", metaPl: "Online \u00B7 Prof. Alicja Dąbrowska-Kugacka", metaEn: "Online \u00B7 Prof. Alicja Dąbrowska-Kugacka" },
+  { href: "https://www.facebook.com/events/1842680213344407/", img: "/img/event4_warsztaty-cover.webp", alt: "Pacjent-lek-zesp\u00F3ł", date: "11.10.2025", titlePl: "Pacjent \u2014 lek \u2014 zesp\u00F3ł: wyzwania opieki kardiologicznej", titleEn: "Patient \u2014 Drug \u2014 Team: Cardiology Care Challenges", metaPl: "Warszawa \u00B7 Warsztaty stacjonarne", metaEn: "Warsaw \u00B7 In-person workshops" },
+  { href: "https://www.facebook.com/events/2129639964128688", img: "/img/event-2129639964128688.webp", alt: "II Edycja Kardiologicznej Szkoły Letniej", date: "08\u201312.08.2025", titlePl: "II Edycja Kardiologicznej Szkoły Letniej", titleEn: "2nd Cardiology Summer School", metaPl: "Gdańsk \u00B7 SKN Hemodynamiki GUMed", metaEn: "Gdańsk \u00B7 SKN Hemodynamiki GUMed" },
+  { href: "https://www.facebook.com/events/1607813013172743", img: "/img/event-1607813013172743.webp", alt: "Wiosenna Szkoła Kardiologiczna I", date: "16.03.2025", titlePl: "Wiosenna Szkoła Kardiologiczna \u2014 I Edycja", titleEn: "Spring Cardiology School \u2014 1st Edition", metaPl: "Warszawa \u00B7 Centrum Symulacji WUM", metaEn: "Warsaw \u00B7 WUM Simulation Center" },
+];
+
 const s = {
   card: { background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 16 },
   title: { fontSize: 16, fontWeight: 700 as const, color: "#0f172a", marginBottom: 16 },
@@ -63,17 +85,22 @@ function PairField({ label, valuePl, valueEn, onChangePl, onChangeEn, multiline 
 
 export default function EventsEditor() {
   const supabase = createClient();
-  const [upcoming, setUpcoming] = useState<UpcomingEvent>({});
-  const [past, setPast] = useState<PastEvent[]>([]);
+  const [upcoming, setUpcoming] = useState<UpcomingEvent>(DEFAULT_UPCOMING);
+  const [past, setPast] = useState<PastEvent[]>(DEFAULT_PAST);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("site_content").select("*").in("id", ["events_upcoming", "events_past"]);
-    data?.forEach((row) => {
-      if (row.id === "events_upcoming") setUpcoming(row.content as UpcomingEvent);
-      if (row.id === "events_past") setPast(row.content as PastEvent[]);
-    });
+    if (data && data.length > 0) {
+      data.forEach((row) => {
+        if (row.id === "events_upcoming") setUpcoming(row.content as UpcomingEvent);
+        if (row.id === "events_past") {
+          const arr = row.content as PastEvent[];
+          if (arr.length > 0) setPast(arr);
+        }
+      });
+    }
   }, [supabase]);
 
   useEffect(() => { load(); }, [load]);
