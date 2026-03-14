@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase-admin";
+import { sendPaymentRejectedEmail } from "@/lib/mailer";
 import { createClient } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -26,6 +27,15 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+  const { data: confirmationData, error: confirmationError } = await admin
+    .from("payment_confirmations")
+    .select("member_id")
+    .eq("id", confirmation_id)
+    .maybeSingle();
+
+  if (confirmationError) {
+    return NextResponse.json({ error: confirmationError.message }, { status: 500 });
+  }
 
   const { error } = await admin
     .from("payment_confirmations")
@@ -34,6 +44,26 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (confirmationData?.member_id) {
+    const { data: memberProfile } = await admin
+      .from("profiles")
+      .select("email, first_name")
+      .eq("id", confirmationData.member_id)
+      .maybeSingle();
+
+    if (memberProfile?.email) {
+      try {
+        await sendPaymentRejectedEmail(
+          memberProfile.email,
+          memberProfile.first_name || "Członku SSK",
+          reason
+        );
+      } catch (mailError) {
+        console.error("Failed to send payment rejection email:", mailError);
+      }
+    }
   }
 
   return NextResponse.json({ success: true });

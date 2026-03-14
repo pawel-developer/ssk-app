@@ -24,7 +24,7 @@ export async function GET() {
 
   const { data: pending, error } = await admin
     .from("payment_confirmations")
-    .select("*, profiles!payment_confirmations_member_id_fkey(first_name, last_name, email)")
+    .select("*, profiles!payment_confirmations_member_id_fkey(first_name, last_name, email, fee_active, fee_valid_until, join_date, status)")
     .eq("status", "pending")
     .order("uploaded_at", { ascending: false });
 

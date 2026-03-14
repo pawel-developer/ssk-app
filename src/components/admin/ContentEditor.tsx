@@ -10,6 +10,21 @@ interface FaqItem {
   answerEn: string;
 }
 
+interface EmailTemplateEditor {
+  subject: string;
+  body: string;
+}
+
+interface EmailTemplatesEditor {
+  welcome: EmailTemplateEditor;
+  payment_confirmed: EmailTemplateEditor;
+  payment_rejected: EmailTemplateEditor;
+  payment_reminder: EmailTemplateEditor;
+  birthday: EmailTemplateEditor;
+  event_announcement: EmailTemplateEditor;
+  event_meeting_link: EmailTemplateEditor;
+}
+
 const s = {
   card: { background: "#fff", borderRadius: 10, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 12 },
   sectionTitle: { fontSize: 14, fontWeight: 700 as const, color: "#0f172a", marginBottom: 8, cursor: "pointer", display: "flex" as const, justifyContent: "space-between" as const, alignItems: "center" as const },
@@ -406,6 +421,60 @@ const DEFAULT_FAQ: FaqItem[] = [
   { questionPl: "Jak się zapisać?", questionEn: "How do I sign up?", answerPl: "Wypełnij formularz zgłoszeniowy online (link w sekcji \u201EDołącz do nas\u201D), opłać składkę członkowską (50 zł/rok) i czekaj na potwierdzenie. Cały proces zajmuje kilka minut.", answerEn: "Fill out the online application form (link in the \u2018Join Us\u2019 section), pay the membership fee (50 PLN/year), and wait for confirmation. The whole process takes just a few minutes." },
 ];
 
+const DEFAULT_EMAIL_TEMPLATES: EmailTemplatesEditor = {
+  welcome: {
+    subject: "Witamy w SSK",
+    body: "Cześć {{firstName}},\n\nDziękujemy za rejestrację w Studenckim Stowarzyszeniu Kardiologicznym.\nTwoje konto zostało utworzone i możesz się już zalogować.\n\nPozdrawiamy,\nSSK",
+  },
+  payment_confirmed: {
+    subject: "Składka członkowska została potwierdzona",
+    body: "Cześć {{firstName}},\n\nTwoja płatność składki członkowskiej została potwierdzona.\nSkładka jest aktywna do: {{feeValidUntil}}.\n\nDziękujemy,\nSSK",
+  },
+  payment_rejected: {
+    subject: "Weryfikacja płatności wymaga poprawy",
+    body: "Cześć {{firstName}},\n\nNie udało się potwierdzić przesłanego potwierdzenia płatności.\n{{reasonLine}}\n\nMożesz przesłać nowe potwierdzenie w panelu członka.\nPozdrawiamy,\nSSK",
+  },
+  payment_reminder: {
+    subject: "Przypomnienie o składce członkowskiej SSK",
+    body: "Cześć {{firstName}},\n\nPrzypominamy o opłaceniu składki członkowskiej SSK.\n{{feeValidUntilLine}}\n\nPo opłaceniu składki prześlij potwierdzenie w panelu członka.\n\nPozdrawiamy,\nSSK",
+  },
+  birthday: {
+    subject: "Najlepsze życzenia urodzinowe od SSK",
+    body: "Cześć {{firstName}},\n\nW dniu Twoich urodzin życzymy Ci dużo zdrowia, sukcesów i satysfakcji z rozwoju w kardiologii.\n\nWszystkiego najlepszego!\nSSK",
+  },
+  event_announcement: {
+    subject: "Nowe wydarzenie SSK: {{eventTitle}}",
+    body: "Cześć {{firstName}},\n\nZapraszamy na wydarzenie: {{eventTitle}}.\n{{eventEmailDescriptionLine}}\n\nLink do Facebooka: {{eventFbUrl}}\n\nDo zobaczenia,\nSSK",
+  },
+  event_meeting_link: {
+    subject: "Link do spotkania: {{eventTitle}}",
+    body: "Cześć {{firstName}},\n\nPoniżej znajdziesz link do spotkania dla wydarzenia: {{eventTitle}}.\n\nLink do spotkania: {{eventMeetingLink}}\n\nDo zobaczenia,\nSSK",
+  },
+};
+
+function mergeEmailTemplates(raw: unknown): EmailTemplatesEditor {
+  const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const merged: EmailTemplatesEditor = { ...DEFAULT_EMAIL_TEMPLATES };
+
+  (Object.keys(DEFAULT_EMAIL_TEMPLATES) as Array<keyof EmailTemplatesEditor>).forEach((key) => {
+    const value = src[key];
+    if (!value || typeof value !== "object") return;
+    const template = value as Record<string, unknown>;
+    merged[key] = {
+      subject:
+        typeof template.subject === "string" && template.subject.trim()
+          ? template.subject
+          : DEFAULT_EMAIL_TEMPLATES[key].subject,
+      body:
+        typeof template.body === "string" && template.body.trim()
+          ? template.body
+          : DEFAULT_EMAIL_TEMPLATES[key].body,
+    };
+  });
+
+  return merged;
+}
+
 export default function ContentEditor() {
   const supabase = createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -417,6 +486,7 @@ export default function ContentEditor() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [coop, setCoop] = useState<any>(DEFAULT_COOP);
   const [faq, setFaq] = useState<FaqItem[]>(DEFAULT_FAQ);
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplatesEditor>(DEFAULT_EMAIL_TEMPLATES);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [heroTranslating, setHeroTranslating] = useState(false);
@@ -429,7 +499,7 @@ export default function ContentEditor() {
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("site_content").select("*").in("id", [
-      "page_hero", "page_about", "page_join", "page_cooperation", "faq",
+      "page_hero", "page_about", "page_join", "page_cooperation", "faq", "email_templates",
     ]);
     if (data && data.length > 0) {
       data.forEach((row) => {
@@ -438,6 +508,7 @@ export default function ContentEditor() {
         if (row.id === "page_join") setJoin(row.content);
         if (row.id === "page_cooperation") setCoop(row.content);
         if (row.id === "faq") setFaq(row.content as FaqItem[]);
+        if (row.id === "email_templates") setEmailTemplates(mergeEmailTemplates(row.content));
       });
     }
   }, [supabase]);
@@ -460,6 +531,7 @@ export default function ContentEditor() {
       { id: "page_join", content: join },
       { id: "page_cooperation", content: coop },
       { id: "faq", content: faq },
+      { id: "email_templates", content: emailTemplates },
     ];
     for (const u of updates) {
       const { error } = await supabase.from("site_content").upsert({ id: u.id, content: u.content });
@@ -470,7 +542,6 @@ export default function ContentEditor() {
     setTimeout(() => setMsg(""), 3000);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateAboutCard = (idx: number, field: string, val: string) => {
     const cards = [...(about.cards || [])];
     cards[idx] = { ...cards[idx], [field]: val };
@@ -481,6 +552,17 @@ export default function ContentEditor() {
     const items = [...faq];
     items[idx] = { ...items[idx], [field]: val };
     setFaq(items);
+  };
+
+  const updateEmailTemplate = (
+    key: keyof EmailTemplatesEditor,
+    field: keyof EmailTemplateEditor,
+    value: string
+  ) => {
+    setEmailTemplates((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: value },
+    }));
   };
 
   const translateHeroSection = async () => {
@@ -580,6 +662,44 @@ export default function ContentEditor() {
           </button>
         </div>
       </div>
+
+      <CollapsibleSection title="Automatyczne e-maile">
+        <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 12 }}>
+          Te treści są używane przez automatyczne e-maile (rejestracja, płatności, przypomnienia, urodziny, wydarzenia). Dostępne placeholdery:
+          <code> {"{{firstName}}"}</code>, <code>{"{{feeValidUntil}}"}</code>, <code>{"{{reasonLine}}"}</code>, <code>{"{{feeValidUntilLine}}"}</code>, <code>{"{{eventTitle}}"}</code>, <code>{"{{eventFbUrl}}"}</code>, <code>{"{{eventEmailDescriptionLine}}"}</code>, <code>{"{{eventMeetingLink}}"}</code>.
+        </p>
+        <div style={{ display: "grid", gap: 10 }}>
+          {([
+            { key: "welcome", label: "Powitanie po rejestracji" },
+            { key: "payment_confirmed", label: "Potwierdzenie składki" },
+            { key: "payment_rejected", label: "Odrzucenie płatności" },
+            { key: "payment_reminder", label: "Przypomnienie o składce" },
+            { key: "birthday", label: "Życzenia urodzinowe" },
+            { key: "event_announcement", label: "Informacja o wydarzeniu" },
+            { key: "event_meeting_link", label: "Link do spotkania (wydarzenie)" },
+          ] as const).map((item) => (
+            <div key={item.key} style={{ background: "#f8fafc", borderRadius: 8, padding: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 8 }}>{item.label}</div>
+              <div style={{ marginBottom: 8 }}>
+                <label style={s.label}>Temat</label>
+                <input
+                  style={s.input}
+                  value={emailTemplates[item.key].subject}
+                  onChange={(e) => updateEmailTemplate(item.key, "subject", e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={s.label}>Treść</label>
+                <textarea
+                  style={{ ...s.textarea, minHeight: 110 }}
+                  value={emailTemplates[item.key].body}
+                  onChange={(e) => updateEmailTemplate(item.key, "body", e.target.value)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </CollapsibleSection>
 
       {/* HERO */}
       <CollapsibleSection title="Sekcja Hero" defaultOpen>
