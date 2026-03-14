@@ -25,6 +25,9 @@ interface Profile {
   is_admin: boolean;
   birth_date: string | null;
   birth_place: string | null;
+  is_archived: boolean;
+  archived_at: string | null;
+  archive_reason: string | null;
 }
 
 interface PaymentConfirmation {
@@ -35,10 +38,20 @@ interface PaymentConfirmation {
   uploaded_at: string;
   status: string;
   rejection_reason: string | null;
-  profiles?: { first_name: string; last_name: string; email: string };
+  profiles?: { first_name: string; last_name: string; email: string; fee_active: boolean; fee_valid_until: string | null; join_date: string | null; status: string | null };
 }
 
-type Tab = "members" | "pending" | "board" | "content" | "events";
+type Tab = "members" | "past_members" | "pending" | "board" | "content" | "events";
+
+function isMembershipActiveByDate(feeValidUntil: string | null) {
+  if (!feeValidUntil) return false;
+  const validUntil = new Date(feeValidUntil);
+  if (Number.isNaN(validUntil.getTime())) return false;
+  validUntil.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return validUntil >= today;
+}
 
 export default function AdminPanel() {
   const [tab, setTab] = useState<Tab>("members");
@@ -46,7 +59,6 @@ export default function AdminPanel() {
   const [pending, setPending] = useState<PaymentConfirmation[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "expired">("all");
-  const [editing, setEditing] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -57,9 +69,28 @@ export default function AdminPanel() {
   const [copiedEmails, setCopiedEmails] = useState(false);
   const [sortKey, setSortKey] = useState<string>("last_name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [generatingCertificates, setGeneratingCertificates] = useState(false);
+  const [remindingAll, setRemindingAll] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  const loadPendingPayments = useCallback(async () => {
+    try {
+      const res = await fetch("/api/payments");
+      const paymentResult = await res.json();
+      if (res.ok && paymentResult.pending) {
+        setPending(paymentResult.pending as PaymentConfirmation[]);
+      } else {
+        console.error("Błąd ładowania potwierdzeń:", JSON.stringify(paymentResult));
+      }
+    } catch (err) {
+      console.error("Błąd fetch /api/payments:", err);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -89,28 +120,17 @@ export default function AdminPanel() {
 
       const { data: membersData } = await supabase
         .from("profiles")
-        .select("*")
+        .select("id, email, first_name, last_name, phone, university, field_of_study, year_of_study, status, join_date, fee_active, fee_valid_until, last_payment_date, is_admin, birth_date, birth_place, is_archived, archived_at, archive_reason")
         .order("last_name", { ascending: true });
 
       if (membersData) setMembers(membersData);
-
-      try {
-        const res = await fetch("/api/payments");
-        const paymentResult = await res.json();
-        if (res.ok && paymentResult.pending) {
-          setPending(paymentResult.pending as PaymentConfirmation[]);
-        } else {
-          console.error("Błąd ładowania potwierdzeń:", JSON.stringify(paymentResult));
-        }
-      } catch (err) {
-        console.error("Błąd fetch /api/payments:", err);
-      }
       setLoading(false);
+      loadPendingPayments();
     } catch (err: unknown) {
       setError("Nieoczekiwany błąd: " + (err instanceof Error ? err.message : String(err)));
       setLoading(false);
     }
-  }, [supabase, router]);
+  }, [supabase, router, loadPendingPayments]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -150,24 +170,23 @@ export default function AdminPanel() {
     loadData();
   };
 
-  const handleDownload = async (fileUrl: string) => {
-    const { data } = await supabase.storage.from("payment-proofs").createSignedUrl(fileUrl, 300);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  const handlePreview = async (fileUrl: string, fileName: string) => {
+    setPreviewLoading(true);
+    setPreviewFileName(fileName || "Plik");
+    const { data } = await supabase.storage.from("payment-proofs").createSignedUrl(fileUrl, 600);
+    if (data?.signedUrl) {
+      setPreviewUrl(data.signedUrl);
+    }
+    setPreviewLoading(false);
   };
 
-  const handleSaveEdit = async () => {
-    if (!editing) return;
-    setActionLoading(editing.id);
-    await supabase.from("profiles").update({
-      first_name: editing.first_name, last_name: editing.last_name,
-      phone: editing.phone, university: editing.university,
-      field_of_study: editing.field_of_study, year_of_study: editing.year_of_study,
-      status: editing.status, fee_active: editing.fee_active,
-      fee_valid_until: editing.fee_valid_until, last_payment_date: editing.last_payment_date,
-    }).eq("id", editing.id);
-    setEditing(null);
-    setActionLoading(null);
-    loadData();
+  const handleDownloadFromPreview = () => {
+    if (!previewUrl) return;
+    const a = document.createElement("a");
+    a.href = previewUrl;
+    a.download = previewFileName;
+    a.target = "_blank";
+    a.click();
   };
 
   const handleDelete = async (member: Profile) => {
@@ -190,6 +209,44 @@ export default function AdminPanel() {
     loadData();
   };
 
+  const handleArchive = async (member: Profile) => {
+    const name = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email;
+    if (!confirm(`Zarchiwizować członka "${name}"?\n\nCzłonek pozostanie w bazie jako były członek.`)) return;
+    setActionLoading(member.id);
+    const res = await fetch("/api/members/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member_id: member.id }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      alert("Błąd archiwizacji: " + (data.error || "Nieznany błąd"));
+    }
+    setActionLoading(null);
+    loadData();
+  };
+
+  const handleRestore = async (member: Profile) => {
+    const name = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email;
+    if (!confirm(`Przywrócić członka "${name}"?`)) return;
+    setActionLoading(member.id);
+    const res = await fetch("/api/members/archive", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member_id: member.id }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      alert("Błąd przywracania: " + (data.error || "Nieznany błąd"));
+    }
+    setActionLoading(null);
+    loadData();
+  };
+
+  const openMemberProfile = (memberId: string) => {
+    router.push(`/admin/member/${memberId}`);
+  };
+
   const downloadCsv = (rows: string[][], filename: string) => {
     const csvContent = rows.map((r) =>
       r.map((val) =>
@@ -206,11 +263,53 @@ export default function AdminPanel() {
   };
 
   const handleExport = () => {
-    const headers = ["email", "first_name", "last_name", "phone", "university", "field_of_study", "year_of_study", "status", "join_date", "fee_active", "fee_valid_until", "last_payment_date"];
+    if (members.length === 0) {
+      downloadCsv([[]], `ssk-czlonkowie-pelna-baza-${new Date().toISOString().split("T")[0]}.csv`);
+      return;
+    }
+
+    const preferredOrder = [
+      "id",
+      "email",
+      "first_name",
+      "last_name",
+      "phone",
+      "university",
+      "field_of_study",
+      "year_of_study",
+      "status",
+      "join_date",
+      "birth_date",
+      "birth_place",
+      "pesel",
+      "address",
+      "citizenship",
+      "rodo_consent",
+      "statute_consent",
+      "studies_start_date",
+      "studies_end_date",
+      "fee_active",
+      "last_payment_date",
+      "fee_valid_until",
+      "is_admin",
+      "created_at",
+      "updated_at",
+    ];
+
+    const allKeys = new Set<string>();
+    for (const member of members) {
+      Object.keys(member as unknown as Record<string, unknown>).forEach((key) => allKeys.add(key));
+    }
+
+    const extraKeys = Array.from(allKeys)
+      .filter((key) => !preferredOrder.includes(key))
+      .sort((a, b) => a.localeCompare(b));
+
+    const headers = [...preferredOrder.filter((key) => allKeys.has(key)), ...extraKeys];
     const rows = [headers, ...members.map((m) =>
       headers.map((h) => String((m as unknown as Record<string, unknown>)[h] ?? ""))
     )];
-    downloadCsv(rows, `ssk-czlonkowie-${new Date().toISOString().split("T")[0]}.csv`);
+    downloadCsv(rows, `ssk-czlonkowie-pelna-baza-${new Date().toISOString().split("T")[0]}.csv`);
   };
 
   const handleExportBasic = () => {
@@ -247,17 +346,67 @@ export default function AdminPanel() {
     setImporting(false);
   };
 
+  const handleGenerateCertificates = async () => {
+    setGeneratingCertificates(true);
+    try {
+      const res = await fetch("/api/certificates/generate-all", { method: "POST" });
+      const data: { totalActive?: number; generated?: number; failed?: number; error?: string } = await res.json();
+      if (!res.ok) {
+        alert("Błąd generowania certyfikatów: " + (data.error || "Nieznany błąd"));
+        setGeneratingCertificates(false);
+        return;
+      }
+      alert(
+        `Wygenerowano certyfikaty: ${data.generated ?? 0}/${data.totalActive ?? 0}.` +
+        ((data.failed ?? 0) > 0 ? ` Nieudane: ${data.failed}.` : "")
+      );
+    } catch (err) {
+      alert("Błąd generowania certyfikatów: " + (err instanceof Error ? err.message : "Nieznany błąd"));
+    }
+    setGeneratingCertificates(false);
+  };
+
+  const handleRemindAllInactive = async () => {
+    const inactiveCount = members.filter((m) => !isMembershipActiveByDate(m.fee_valid_until)).length;
+    if (inactiveCount === 0) {
+      alert("Brak nieaktywnych członków do przypomnienia.");
+      return;
+    }
+
+    if (!confirm(`Wysłać przypomnienie o składce do wszystkich nieaktywnych członków (${inactiveCount})?`)) {
+      return;
+    }
+
+    setRemindingAll(true);
+    try {
+      const res = await fetch("/api/payments/remind-all", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert("Błąd wysyłki przypomnień: " + (data.error || "Nieznany błąd"));
+        setRemindingAll(false);
+        return;
+      }
+      alert(
+        `Wysłano: ${data.sent ?? 0}, nieudane: ${data.failed ?? 0}, bez e-maila: ${data.skippedNoEmail ?? 0}.`
+      );
+    } catch (err) {
+      alert("Błąd wysyłki przypomnień: " + (err instanceof Error ? err.message : "Nieznany błąd"));
+    }
+    setRemindingAll(false);
+  };
+
   const filteredMembers = members.filter((m) => {
+    const matchTabCategory = tab === "past_members" ? m.is_archived : !m.is_archived;
     const q = search.toLowerCase();
     const matchSearch = !q ||
       m.first_name?.toLowerCase().includes(q) ||
       m.last_name?.toLowerCase().includes(q) ||
       m.email?.toLowerCase().includes(q) ||
       m.university?.toLowerCase().includes(q);
-    const now = new Date();
-    const isExpired = !m.fee_active || (m.fee_valid_until && new Date(m.fee_valid_until) < now);
-    const matchFilter = filter === "all" || (filter === "active" && !isExpired) || (filter === "expired" && isExpired);
-    return matchSearch && matchFilter;
+    if (!matchTabCategory || !matchSearch) return false;
+    if (tab === "past_members") return true;
+    const isExpired = !isMembershipActiveByDate(m.fee_valid_until);
+    return filter === "all" || (filter === "active" && !isExpired) || (filter === "expired" && isExpired);
   });
 
   const toggleSort = (key: string) => {
@@ -280,13 +429,16 @@ export default function AdminPanel() {
         valB = `${b.last_name ?? ""} ${b.first_name ?? ""}`.toLowerCase();
         break;
       case "fee_status": {
-        const now = new Date();
-        const expA = !a.fee_active || (a.fee_valid_until && new Date(a.fee_valid_until) < now);
-        const expB = !b.fee_active || (b.fee_valid_until && new Date(b.fee_valid_until) < now);
+        const expA = !isMembershipActiveByDate(a.fee_valid_until);
+        const expB = !isMembershipActiveByDate(b.fee_valid_until);
         valA = expA ? 1 : 0;
         valB = expB ? 1 : 0;
         break;
       }
+      case "archive_status":
+        valA = a.is_archived ? 1 : 0;
+        valB = b.is_archived ? 1 : 0;
+        break;
       default:
         valA = (a as unknown as Record<string, string | null>)[sortKey] ?? "";
         valB = (b as unknown as Record<string, string | null>)[sortKey] ?? "";
@@ -325,11 +477,11 @@ export default function AdminPanel() {
     td: { padding: "10px 16px", borderBottom: "1px solid #f1f5f9", color: "#1e293b", fontSize: 14 },
     badge: (color: string, bg: string) => ({ display: "inline-block", padding: "4px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600, background: bg, color }),
     btn: (bg: string, color: string) => ({ padding: "6px 12px", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", background: bg, color, transition: "all .15s" }),
-    input: { width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const },
   };
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: "members", label: `Członkowie (${members.length})` },
+    { key: "members", label: `Członkowie (${members.filter((m) => !m.is_archived).length})` },
+    { key: "past_members", label: `Byli członkowie (${members.filter((m) => m.is_archived).length})` },
     { key: "pending", label: `Płatności (${pending.length})` },
     { key: "board", label: "Zarząd" },
     { key: "content", label: "Treści strony" },
@@ -346,6 +498,7 @@ export default function AdminPanel() {
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button data-tip-b="Odśwież dane" onClick={() => { setLoading(true); loadData(); }} style={st.btn("#0369a1", "#fff")}>Odśwież</button>
+          <button data-tip-b="Przejdź do panelu członka" onClick={() => router.push("/panel")} style={st.btn("#0ea5e9", "#fff")}>Panel członka</button>
           <a data-tip-b="Idź na stronę" href="/" style={{ ...st.btn("#e2e8f0", "#475569"), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Strona główna</a>
           <button data-tip-b="Wyloguj" onClick={handleLogout} style={st.btn("#dc2626", "#fff")}>Wyloguj</button>
         </div>
@@ -366,29 +519,33 @@ export default function AdminPanel() {
       </div>
 
       {/* Stats — only on members/pending tabs */}
-      {(tab === "members" || tab === "pending") && (
+      {(tab === "members" || tab === "pending" || tab === "past_members") && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, padding: 24 }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-            <div style={{ fontSize: 32, fontWeight: 700, color: "#0f172a" }}>{members.length}</div>
-            <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Wszystkich członków</div>
+            <div style={{ fontSize: 32, fontWeight: 700, color: "#0f172a" }}>{members.filter((m) => !m.is_archived).length}</div>
+            <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Obecnych członków</div>
           </div>
           <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-            <div style={{ fontSize: 32, fontWeight: 700, color: "#16a34a" }}>{members.filter((m) => m.fee_active).length}</div>
+            <div style={{ fontSize: 32, fontWeight: 700, color: "#16a34a" }}>{members.filter((m) => !m.is_archived && isMembershipActiveByDate(m.fee_valid_until)).length}</div>
             <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Aktywne składki</div>
           </div>
           <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-            <div style={{ fontSize: 32, fontWeight: 700, color: "#dc2626" }}>{members.filter((m) => !m.fee_active).length}</div>
+            <div style={{ fontSize: 32, fontWeight: 700, color: "#dc2626" }}>{members.filter((m) => !m.is_archived && !isMembershipActiveByDate(m.fee_valid_until)).length}</div>
             <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Wygasłe</div>
           </div>
           <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
             <div style={{ fontSize: 32, fontWeight: 700, color: "#f59e0b" }}>{pending.length}</div>
             <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Oczekujące potwierdzenia</div>
           </div>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <div style={{ fontSize: 32, fontWeight: 700, color: "#6b7280" }}>{members.filter((m) => m.is_archived).length}</div>
+            <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Byli członkowie</div>
+          </div>
         </div>
       )}
 
       {/* ==================== MEMBERS TAB ==================== */}
-      {tab === "members" && (
+      {(tab === "members" || tab === "past_members") && (
         <div style={{ padding: "0 24px 24px" }}>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
             <input
@@ -396,23 +553,31 @@ export default function AdminPanel() {
               value={search} onChange={(e) => setSearch(e.target.value)}
               style={{ padding: "10px 14px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, minWidth: 280, outline: "none", fontFamily: "inherit" }}
             />
-            <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} style={{ padding: "10px 14px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }}>
-              <option value="all">Wszystkie</option>
-              <option value="active">Aktywne składki</option>
-              <option value="expired">Wygasłe</option>
-            </select>
+            {tab === "members" && (
+              <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} style={{ padding: "10px 14px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }}>
+                <option value="all">Wszystkie</option>
+                <option value="active">Aktywne składki</option>
+                <option value="expired">Wygasłe</option>
+              </select>
+            )}
             <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              <button data-tip="Kopiuj emaile aktywnych" onClick={() => {
-                const activeEmails = members.filter((m) => m.fee_active).map((m) => m.email).filter(Boolean);
+              {tab === "members" && <button data-tip="Kopiuj emaile aktywnych" onClick={() => {
+                const activeEmails = members.filter((m) => !m.is_archived && isMembershipActiveByDate(m.fee_valid_until)).map((m) => m.email).filter(Boolean);
                 navigator.clipboard.writeText(activeEmails.join(", "));
                 setCopiedEmails(true);
                 setTimeout(() => setCopiedEmails(false), 2000);
               }} style={st.btn("#16a34a", "#fff")}>
-                {copiedEmails ? "Skopiowano!" : `Kopiuj emaile aktywnych (${members.filter((m) => m.fee_active).length})`}
-              </button>
-              <button data-tip="CSV: imię, nazwisko, email" onClick={handleExportBasic} style={st.btn("#0369a1", "#fff")}>Eksport podstawowy</button>
-              <button data-tip="CSV ze wszystkimi polami" onClick={handleExport} style={st.btn("#475569", "#fff")}>Eksport pełny CSV</button>
-              <button data-tip="Import z CSV" onClick={() => { setImportModal(true); setImportResult(null); }} style={st.btn("#7c3aed", "#fff")}>Import CSV</button>
+                {copiedEmails ? "Skopiowano!" : `Kopiuj emaile aktywnych (${members.filter((m) => !m.is_archived && isMembershipActiveByDate(m.fee_valid_until)).length})`}
+              </button>}
+              {tab === "members" && <button data-tip="CSV: imię, nazwisko, email" onClick={handleExportBasic} style={st.btn("#0369a1", "#fff")}>Eksport podstawowy</button>}
+              {tab === "members" && <button data-tip="CSV ze wszystkimi polami" onClick={handleExport} style={st.btn("#475569", "#fff")}>Eksport pełny CSV</button>}
+              {tab === "members" && <button data-tip="Import z CSV" onClick={() => { setImportModal(true); setImportResult(null); }} style={st.btn("#7c3aed", "#fff")}>Import CSV</button>}
+              {tab === "members" && <button data-tip="Generuj certyfikaty dla aktywnych członków" onClick={handleGenerateCertificates} disabled={generatingCertificates} style={st.btn("#0f766e", "#fff")}>
+                {generatingCertificates ? "Generowanie..." : "Generuj certyfikaty aktywnych"}
+              </button>}
+              {tab === "members" && <button data-tip="Wyślij przypomnienia do nieaktywnych" onClick={handleRemindAllInactive} disabled={remindingAll} style={st.btn("#f59e0b", "#fff")}>
+                {remindingAll ? "Wysyłanie..." : "Przypomnij wszystkim nieaktywnym"}
+              </button>}
             </div>
           </div>
 
@@ -425,6 +590,7 @@ export default function AdminPanel() {
                     { key: "email", label: "Email" },
                     { key: "university", label: "Uczelnia" },
                     { key: "join_date", label: "Data dołączenia" },
+                    { key: "archive_status", label: "Członkostwo" },
                     { key: "fee_status", label: "Składka" },
                     { key: "fee_valid_until", label: "Ważna do" },
                   ] as const).map((col) => (
@@ -437,23 +603,50 @@ export default function AdminPanel() {
               </thead>
               <tbody>
                 {sortedMembers.map((m) => {
-                  const expired = !m.fee_active || (m.fee_valid_until && new Date(m.fee_valid_until) < new Date());
+                  const expired = !isMembershipActiveByDate(m.fee_valid_until);
                   return (
-                    <tr key={m.id} style={{ cursor: "pointer" }} onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")} onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
-                      <td style={st.td}>{[m.first_name, m.last_name].filter(Boolean).join(" ") || "—"}</td>
+                    <tr
+                      key={m.id}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => openMemberProfile(m.id)}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+                    >
+                      <td style={st.td}>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openMemberProfile(m.id); }}
+                          style={{ padding: 0, border: "none", background: "none", color: "#0f172a", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 14 }}
+                        >
+                          {[m.first_name, m.last_name].filter(Boolean).join(" ") || "—"}
+                        </button>
+                      </td>
                       <td style={st.td}>{m.email}</td>
                       <td style={st.td}>{m.university || "—"}</td>
                       <td style={st.td}>{m.join_date ? new Date(m.join_date).toLocaleDateString("pl-PL") : "—"}</td>
                       <td style={st.td}>
-                        <span style={expired ? st.badge("#dc2626", "#fee2e2") : st.badge("#16a34a", "#dcfce7")}>
-                          {expired ? "Wygasła" : "Aktywna"}
+                        <span style={m.is_archived ? st.badge("#6b7280", "#e5e7eb") : st.badge("#1d4ed8", "#dbeafe")}>
+                          {m.is_archived ? "Były członek" : "Obecny członek"}
                         </span>
                       </td>
-                      <td style={st.td}>{m.fee_valid_until ? new Date(m.fee_valid_until).toLocaleDateString("pl-PL") : "—"}</td>
+                      <td style={st.td}>
+                        <span style={expired ? st.badge("#dc2626", "#fee2e2") : st.badge("#16a34a", "#dcfce7")}>
+                          {m.is_archived ? "—" : expired ? "Wygasła" : "Aktywna"}
+                        </span>
+                      </td>
+                      <td style={st.td}>{m.is_archived ? "—" : m.fee_valid_until ? new Date(m.fee_valid_until).toLocaleDateString("pl-PL") : "—"}</td>
                       <td style={{ ...st.td, whiteSpace: "nowrap" }}>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button data-tip="Edytuj profil" onClick={() => setEditing({ ...m })} style={st.btn("#2563eb", "#fff")}>Edytuj</button>
-                          <button data-tip="Usuń konto" onClick={() => handleDelete(m)} disabled={actionLoading === m.id} style={st.btn("#dc2626", "#fff")}>
+                          {m.is_archived ? (
+                            <button data-tip="Przywróć członka" onClick={(e) => { e.stopPropagation(); handleRestore(m); }} disabled={actionLoading === m.id} style={st.btn("#2563eb", "#fff")}>
+                              {actionLoading === m.id ? "..." : "Przywróć"}
+                            </button>
+                          ) : (
+                            <button data-tip="Archiwizuj członka" onClick={(e) => { e.stopPropagation(); handleArchive(m); }} disabled={actionLoading === m.id} style={st.btn("#64748b", "#fff")}>
+                              {actionLoading === m.id ? "..." : "Archiwizuj"}
+                            </button>
+                          )}
+                          <button data-tip="Usuń konto" onClick={(e) => { e.stopPropagation(); handleDelete(m); }} disabled={actionLoading === m.id} style={st.btn("#dc2626", "#fff")}>
                             {actionLoading === m.id ? "..." : "Usuń"}
                           </button>
                         </div>
@@ -462,7 +655,7 @@ export default function AdminPanel() {
                   );
                 })}
                 {sortedMembers.length === 0 && (
-                  <tr><td colSpan={7} style={{ ...st.td, textAlign: "center", color: "#94a3b8" }}>Brak wyników</td></tr>
+                  <tr><td colSpan={8} style={{ ...st.td, textAlign: "center", color: "#94a3b8" }}>Brak wyników</td></tr>
                 )}
               </tbody>
             </table>
@@ -479,26 +672,46 @@ export default function AdminPanel() {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {pending.map((c) => (
-                <div key={c.id} style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-                  <div>
-                    <p style={{ fontWeight: 700, color: "#0f172a", margin: 0, fontSize: 15 }}>
-                      {c.profiles?.first_name} {c.profiles?.last_name}
-                    </p>
-                    <p style={{ color: "#64748b", margin: "4px 0 0", fontSize: 13 }}>{c.profiles?.email}</p>
-                    <p style={{ color: "#94a3b8", margin: "4px 0 0", fontSize: 12 }}>
-                      Przesłano: {new Date(c.uploaded_at).toLocaleDateString("pl-PL")} · {c.file_name || "Plik"}
-                    </p>
+              {pending.map((c) => {
+                const prof = c.profiles;
+                const memberExpired = prof ? !isMembershipActiveByDate(prof.fee_valid_until) : null;
+                return (
+                  <div key={c.id} style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+                    <div style={{ minWidth: 200 }}>
+                      <p style={{ fontWeight: 700, color: "#0f172a", margin: 0, fontSize: 15 }}>
+                        {prof?.first_name} {prof?.last_name}
+                      </p>
+                      <p style={{ color: "#64748b", margin: "4px 0 0", fontSize: 13 }}>{prof?.email}</p>
+                      <p style={{ color: "#94a3b8", margin: "4px 0 0", fontSize: 12 }}>
+                        Przesłano: {new Date(c.uploaded_at).toLocaleDateString("pl-PL")}
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 20, alignItems: "center", fontSize: 13, color: "#475569", flexWrap: "wrap" }}>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ color: "#94a3b8", fontSize: 11, marginBottom: 2 }}>Status</div>
+                        <span style={memberExpired === null ? st.badge("#64748b", "#f1f5f9") : memberExpired ? st.badge("#dc2626", "#fee2e2") : st.badge("#16a34a", "#dcfce7")}>
+                          {memberExpired === null ? "—" : memberExpired ? "Nieaktywny" : "Aktywny"}
+                        </span>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ color: "#94a3b8", fontSize: 11, marginBottom: 2 }}>Dołączył/a</div>
+                        <span style={{ fontWeight: 600 }}>{prof?.join_date ? new Date(prof.join_date).toLocaleDateString("pl-PL") : "—"}</span>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ color: "#94a3b8", fontSize: 11, marginBottom: 2 }}>Składka do</div>
+                        <span style={{ fontWeight: 600 }}>{prof?.fee_valid_until ? new Date(prof.fee_valid_until).toLocaleDateString("pl-PL") : "—"}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button data-tip="Podgląd pliku" onClick={() => handlePreview(c.file_url, c.file_name)} style={st.btn("#e2e8f0", "#475569")}>Podgląd</button>
+                      <button data-tip="Aktywuj składkę" onClick={() => handleConfirm(c)} disabled={actionLoading === c.id} style={st.btn("#16a34a", "#fff")}>
+                        {actionLoading === c.id ? "..." : "Zatwierdź"}
+                      </button>
+                      <button data-tip="Odrzuć wpłatę" onClick={() => handleReject(c)} disabled={actionLoading === c.id} style={st.btn("#dc2626", "#fff")}>Odrzuć</button>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button data-tip="Pobierz plik" onClick={() => handleDownload(c.file_url)} style={st.btn("#e2e8f0", "#475569")}>Pobierz</button>
-                    <button data-tip="Aktywuj składkę" onClick={() => handleConfirm(c)} disabled={actionLoading === c.id} style={st.btn("#16a34a", "#fff")}>
-                      {actionLoading === c.id ? "..." : "Zatwierdź"}
-                    </button>
-                    <button data-tip="Odrzuć wpłatę" onClick={() => handleReject(c)} disabled={actionLoading === c.id} style={st.btn("#dc2626", "#fff")}>Odrzuć</button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -512,65 +725,6 @@ export default function AdminPanel() {
 
       {/* ==================== EVENTS TAB ==================== */}
       {tab === "events" && <EventsEditor />}
-
-      {/* ==================== EDIT MEMBER MODAL ==================== */}
-      {editing && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 100, display: "flex", justifyContent: "center", alignItems: "center", padding: 16 }} onClick={() => setEditing(null)}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 32, maxWidth: 560, width: "100%", maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, marginBottom: 16, fontFamily: "var(--font-serif)", color: "#0f172a" }}>
-              Edytuj: {editing.first_name} {editing.last_name}
-            </h3>
-            {([
-              { key: "first_name", label: "Imię" },
-              { key: "last_name", label: "Nazwisko" },
-              { key: "email", label: "Email", disabled: true },
-              { key: "phone", label: "Telefon" },
-              { key: "university", label: "Uczelnia" },
-              { key: "field_of_study", label: "Kierunek" },
-              { key: "year_of_study", label: "Rok studiów" },
-            ] as const).map((f) => (
-              <div key={f.key} style={{ marginBottom: 12 }}>
-                <label style={{ display: "block", fontWeight: 600, fontSize: 14, marginBottom: 4, color: "#1e293b" }}>{f.label}</label>
-                <input style={st.input}
-                  value={(editing as unknown as Record<string, string>)[f.key] || ""}
-                  onChange={(e) => setEditing({ ...editing, [f.key]: e.target.value })}
-                  disabled={"disabled" in f && f.disabled}
-                />
-              </div>
-            ))}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontWeight: 600, fontSize: 14, marginBottom: 4, color: "#1e293b" }}>Status</label>
-              <select style={st.input} value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })}>
-                <option value="student">Student</option>
-                <option value="absolwent">Absolwent</option>
-                <option value="rezydent">Rezydent</option>
-                <option value="stażysta">Stażysta</option>
-                <option value="inny">Inny</option>
-              </select>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, fontSize: 14, color: "#1e293b", cursor: "pointer" }}>
-                <input type="checkbox" checked={editing.fee_active} onChange={(e) => setEditing({ ...editing, fee_active: e.target.checked })} style={{ width: 18, height: 18 }} />
-                Składka aktywna
-              </label>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontWeight: 600, fontSize: 14, marginBottom: 4, color: "#1e293b" }}>Składka ważna do</label>
-              <input type="date" style={st.input} value={editing.fee_valid_until || ""} onChange={(e) => setEditing({ ...editing, fee_valid_until: e.target.value || null })} />
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontWeight: 600, fontSize: 14, marginBottom: 4, color: "#1e293b" }}>Ostatnia wpłata</label>
-              <input type="date" style={st.input} value={editing.last_payment_date || ""} onChange={(e) => setEditing({ ...editing, last_payment_date: e.target.value || null })} />
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button data-tip="Anuluj" onClick={() => setEditing(null)} style={st.btn("#e2e8f0", "#475569")}>Anuluj</button>
-              <button data-tip="Zapisz zmiany" onClick={handleSaveEdit} disabled={actionLoading === editing.id} style={st.btn("#16a34a", "#fff")}>
-                {actionLoading === editing.id ? "Zapisywanie..." : "Zapisz"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ==================== IMPORT MODAL ==================== */}
       {importModal && (
@@ -601,6 +755,34 @@ export default function AdminPanel() {
               <button data-tip="Importuj plik" onClick={handleImport} disabled={importing} style={st.btn("#7c3aed", "#fff")}>
                 {importing ? "Importowanie..." : "Importuj"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ==================== FILE PREVIEW MODAL ==================== */}
+      {(previewUrl || previewLoading) && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 200, display: "flex", justifyContent: "center", alignItems: "center", padding: 16 }} onClick={() => { setPreviewUrl(null); setPreviewFileName(""); }}>
+          <div style={{ background: "#fff", borderRadius: 16, maxWidth: 900, width: "100%", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: "#0f172a", fontFamily: "var(--font-serif)" }}>Podgląd: {previewFileName}</h3>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={handleDownloadFromPreview} style={st.btn("#0369a1", "#fff")}>Pobierz</button>
+                <button onClick={() => { setPreviewUrl(null); setPreviewFileName(""); }} style={st.btn("#e2e8f0", "#475569")}>Zamknij</button>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "center", padding: 24, minHeight: 400, background: "#f8fafc" }}>
+              {previewLoading ? (
+                <p style={{ color: "#64748b" }}>Ładowanie...</p>
+              ) : previewUrl && (previewFileName.toLowerCase().endsWith(".pdf") ? (
+                <iframe src={previewUrl} style={{ width: "100%", height: "70vh", border: "none", borderRadius: 8 }} />
+              ) : previewFileName.match(/\.(jpe?g|png|gif|webp|bmp)$/i) ? (
+                <img src={previewUrl} alt={previewFileName} style={{ maxWidth: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: 8 }} />
+              ) : (
+                <div style={{ textAlign: "center" }}>
+                  <p style={{ color: "#64748b", marginBottom: 16 }}>Podgląd niedostępny dla tego typu pliku.</p>
+                  <button onClick={handleDownloadFromPreview} style={st.btn("#0369a1", "#fff")}>Pobierz plik</button>
+                </div>
+              ))}
             </div>
           </div>
         </div>

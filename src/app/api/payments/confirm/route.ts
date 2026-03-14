@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase-admin";
+import { buildCertificatePath, renderCertificatePdf } from "@/lib/certificates";
+import { sendPaymentConfirmedEmail } from "@/lib/mailer";
 import { createClient } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -30,9 +32,13 @@ export async function POST(request: NextRequest) {
 
   const { data: memberProfile } = await admin
     .from("profiles")
-    .select("join_date, fee_valid_until")
+    .select("join_date, fee_valid_until, first_name, last_name, email, is_archived")
     .eq("id", member_id)
     .maybeSingle();
+
+  if (memberProfile?.is_archived) {
+    return NextResponse.json({ error: "Nie można aktywować składki dla byłego członka" }, { status: 400 });
+  }
 
   let validUntil: Date;
 
@@ -84,6 +90,32 @@ export async function POST(request: NextRequest) {
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
+  }
+
+  try {
+    const pdfBytes = await renderCertificatePdf({
+      firstName: memberProfile?.first_name,
+      lastName: memberProfile?.last_name,
+      joinDate: memberProfile?.join_date || now.toISOString().split("T")[0],
+    });
+    await admin.storage.from("certificates").upload(buildCertificatePath(member_id), pdfBytes, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+  } catch (certificateError) {
+    console.error("Certificate pre-generation failed:", certificateError);
+  }
+
+  if (memberProfile?.email) {
+    try {
+      await sendPaymentConfirmedEmail(
+        memberProfile.email,
+        memberProfile.first_name || "Członku SSK",
+        validUntil.toISOString().split("T")[0]
+      );
+    } catch (mailError) {
+      console.error("Failed to send payment confirmation email:", mailError);
+    }
   }
 
   return NextResponse.json({ success: true });

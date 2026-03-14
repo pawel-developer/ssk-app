@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase-admin";
+import { sendWelcomeEmail } from "@/lib/mailer";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -6,7 +7,7 @@ export async function POST(request: NextRequest) {
 
   const {
     email, password, first_name, last_name, phone, pesel,
-    university, field_of_study, status,
+    university, field_of_study, status, year_of_study,
     birth_date, birth_place, address, citizenship,
     studies_start_date, studies_end_date,
     statute_consent, rodo_consent,
@@ -47,6 +48,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (!status || !["student", "absolwent"].includes(status)) {
+    return NextResponse.json(
+      { error: "Status musi być: student lub absolwent" },
+      { status: 400 }
+    );
+  }
+
+  const allowedYears = status === "student"
+    ? ["1", "2", "3", "4", "5", "6"]
+    : ["rok po", "dwa lata po", "trzy lata po"];
+
+  if (!year_of_study || !allowedYears.includes(year_of_study)) {
+    return NextResponse.json(
+      { error: "Nieprawidłowy rok studiów dla wybranego statusu" },
+      { status: 400 }
+    );
+  }
+
   const admin = createAdminClient();
 
   const { data: existingUsers } = await admin.auth.admin.listUsers();
@@ -78,6 +97,7 @@ export async function POST(request: NextRequest) {
     university: university?.trim() || "",
     field_of_study: field_of_study?.trim() || "",
     status: status || "",
+    year_of_study: year_of_study || "",
     statute_consent: !!statute_consent,
     rodo_consent: !!rodo_consent,
     join_date: new Date().toISOString().split("T")[0],
@@ -100,6 +120,12 @@ export async function POST(request: NextRequest) {
       { error: "Konto utworzone, ale nie udało się zapisać profilu: " + updateError.message },
       { status: 500 }
     );
+  }
+
+  try {
+    await sendWelcomeEmail(email.toLowerCase().trim(), first_name.trim());
+  } catch (mailError) {
+    console.error("Failed to send welcome email:", mailError);
   }
 
   return NextResponse.json({ success: true });

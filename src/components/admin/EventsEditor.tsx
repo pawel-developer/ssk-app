@@ -17,6 +17,12 @@ interface PastEvent {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type UpcomingEvent = Record<string, any>;
+type MailType = "announcement" | "meeting_link";
+type PreviewModalState = {
+  title: string;
+  subject: string;
+  body: string;
+} | null;
 
 const DEFAULT_UPCOMING: UpcomingEvent = {
   img: "/img/event1_wiosenna2-cover.webp",
@@ -28,6 +34,8 @@ const DEFAULT_UPCOMING: UpcomingEvent = {
   badge_pl: "\uD83D\uDCC5 Nadchodz\u0105ce", badge_en: "\uD83D\uDCC5 Upcoming",
   link: "https://www.facebook.com/events/3237057496601991/",
   btn_pl: "Zobacz na Facebooku", btn_en: "View on Facebook",
+  email_desc_pl: "",
+  meeting_link_email: "",
 };
 
 const DEFAULT_PAST: PastEvent[] = [
@@ -77,6 +85,51 @@ function FbField({ label, value, onChange, placeholder }: {
   );
 }
 
+function FbTextAreaField({ label, value, onChange, placeholder, minHeight = 88 }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; minHeight?: number;
+}) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <label style={s.label}>{label}</label>
+      <textarea
+        style={{
+          ...s.input,
+          minHeight,
+          resize: "vertical",
+          lineHeight: 1.45,
+        }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+function buildAutoEmailDescription(event: UpcomingEvent): string {
+  const shortDesc = String(event.desc_pl || "").trim();
+  if (shortDesc) {
+    const normalized = shortDesc.replace(/\s+/g, " ").trim();
+    if (normalized.length <= 220) return normalized;
+    return `${normalized.slice(0, 217).trimEnd()}...`;
+  }
+
+  const title = String(event.title || "").trim();
+  if (title) {
+    return `Krótka informacja o spotkaniu dotyczącym: ${title}.`;
+  }
+
+  return "Krótka informacja o nadchodzącym spotkaniu SSK.";
+}
+
+function withEmailOnlyFields(event: UpcomingEvent): UpcomingEvent {
+  return {
+    ...event,
+    email_desc_pl: typeof event.email_desc_pl === "string" ? event.email_desc_pl : "",
+    meeting_link_email: typeof event.meeting_link_email === "string" ? event.meeting_link_email : "",
+  };
+}
+
 export default function EventsEditor() {
   const supabase = createClient();
   const [upcomingList, setUpcomingList] = useState<UpcomingEvent[]>([DEFAULT_UPCOMING]);
@@ -85,6 +138,11 @@ export default function EventsEditor() {
   const [msg, setMsg] = useState("");
   const [fetchingUpcomingIdx, setFetchingUpcomingIdx] = useState<number | null>(null);
   const [fetchingIdx, setFetchingIdx] = useState<number | null>(null);
+  const [sendingKey, setSendingKey] = useState<string | null>(null);
+  const [previewingKey, setPreviewingKey] = useState<string | null>(null);
+  const [previewModal, setPreviewModal] = useState<PreviewModalState>(null);
+  const [sendStatus, setSendStatus] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [expandedEmailSections, setExpandedEmailSections] = useState<Record<number, boolean>>({});
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("site_content").select("*").in("id", ["events_upcoming", "events_past"]);
@@ -93,9 +151,11 @@ export default function EventsEditor() {
         if (row.id === "events_upcoming") {
           const raw = row.content;
           if (Array.isArray(raw)) {
-            if (raw.length > 0) setUpcomingList(raw as UpcomingEvent[]);
+            if (raw.length > 0) {
+              setUpcomingList((raw as UpcomingEvent[]).map((event) => withEmailOnlyFields(event)));
+            }
           } else if (raw && typeof raw === "object") {
-            setUpcomingList([raw as UpcomingEvent]);
+            setUpcomingList([withEmailOnlyFields(raw as UpcomingEvent)]);
           }
         }
         if (row.id === "events_past") {
@@ -132,6 +192,7 @@ export default function EventsEditor() {
       img: "", title: "", date_pl: "", date_en: "", desc_pl: "", desc_en: "",
       badge_pl: "📅 Nadchodzące", badge_en: "📅 Upcoming",
       link: "", btn_pl: "Zobacz na Facebooku", btn_en: "View on Facebook",
+      email_desc_pl: "", meeting_link_email: "",
     }]);
   };
 
@@ -160,6 +221,7 @@ export default function EventsEditor() {
         img: "", title: "", date_pl: "", date_en: "", desc_pl: "", desc_en: "",
         badge_pl: "📅 Nadchodzące", badge_en: "📅 Upcoming",
         link: "", btn_pl: "Zobacz na Facebooku", btn_en: "View on Facebook",
+        email_desc_pl: "", meeting_link_email: "",
       }]);
     }
   };
@@ -176,9 +238,124 @@ export default function EventsEditor() {
       desc_en: ev.metaEn || "",
       badge_pl: "📅 Nadchodzące", badge_en: "📅 Upcoming",
       btn_pl: "Zobacz na Facebooku", btn_en: "View on Facebook",
+      email_desc_pl: "",
+      meeting_link_email: "",
     };
     setUpcomingList((prev) => [...prev, upcomingEvent]);
     setPast((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const sendToActiveMembers = async (idx: number, mailType: MailType) => {
+    const ev = upcomingList[idx];
+    if (!ev?.title) {
+      setMsg("Uzupełnij tytuł wydarzenia przed wysyłką.");
+      setTimeout(() => setMsg(""), 3500);
+      return;
+    }
+    if (mailType === "announcement" && !ev.link) {
+      setMsg("Uzupełnij link do Facebooka przed wysyłką announcement.");
+      setTimeout(() => setMsg(""), 3500);
+      return;
+    }
+    if (mailType === "meeting_link" && !ev.meeting_link_email) {
+      setMsg("Uzupełnij pole 'Link spotkania (tylko email)' przed wysyłką.");
+      setTimeout(() => setMsg(""), 3500);
+      return;
+    }
+
+    const confirmed = confirm(
+      mailType === "announcement"
+        ? "Wysłać announcement o wydarzeniu do wszystkich aktywnych członków?"
+        : "Wysłać link do spotkania do wszystkich aktywnych członków?"
+    );
+    if (!confirmed) return;
+
+    const key = `${idx}:${mailType}`;
+    setSendingKey(key);
+    setSendStatus((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+    try {
+      const res = await fetch("/api/events/broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mailType,
+          event: {
+            title: String(ev.title || ""),
+            date_pl: String(ev.date_pl || ""),
+            link: String(ev.link || ""),
+            email_desc_pl: String(ev.email_desc_pl || ""),
+            meeting_link_email: String(ev.meeting_link_email || ""),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const message = data?.error || "Nie udało się wysłać e-maili.";
+        setSendStatus((prev) => ({ ...prev, [key]: { ok: false, text: message } }));
+        return;
+      }
+      const summary = `Wysłano: ${data.sent} · Błędy: ${data.failed} · Bez e-maila: ${data.skippedNoEmail} · Aktywni: ${data.activeTotal}`;
+      setSendStatus((prev) => ({ ...prev, [key]: { ok: true, text: summary } }));
+    } catch (err) {
+      setSendStatus((prev) => ({
+        ...prev,
+        [key]: {
+          ok: false,
+          text: err instanceof Error ? err.message : "Nieznany błąd wysyłki.",
+        },
+      }));
+    } finally {
+      setSendingKey(null);
+    }
+  };
+
+  const openEmailPreview = async (idx: number, mailType: MailType) => {
+    const ev = upcomingList[idx];
+    if (!ev?.title) {
+      setMsg("Uzupełnij tytuł wydarzenia, aby zobaczyć podgląd.");
+      setTimeout(() => setMsg(""), 3500);
+      return;
+    }
+
+    const key = `${idx}:${mailType}`;
+    setPreviewingKey(key);
+
+    try {
+      const res = await fetch("/api/events/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mailType,
+          event: {
+            title: String(ev.title || ""),
+            link: String(ev.link || ""),
+            email_desc_pl: String(ev.email_desc_pl || ""),
+            meeting_link_email: String(ev.meeting_link_email || ""),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data?.error || "Nie udało się pobrać podglądu e-maila.");
+        setTimeout(() => setMsg(""), 3500);
+        return;
+      }
+      setPreviewModal({
+        title: mailType === "announcement" ? "Podgląd: announcement email" : "Podgląd: link email",
+        subject: String(data.subject || ""),
+        body: String(data.body || ""),
+      });
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Nieznany błąd podglądu.");
+      setTimeout(() => setMsg(""), 3500);
+    } finally {
+      setPreviewingKey(null);
+    }
   };
 
   const fetchUpcomingOG = async (idx: number) => {
@@ -230,7 +407,6 @@ export default function EventsEditor() {
       href: link, img: "", alt: "", date: "",
       titlePl: "", titleEn: "", metaPl: "", metaEn: "",
     };
-    const newIdx = past.length;
     setPast([newEvent, ...past]);
 
     setFetchingIdx(0);
@@ -303,7 +479,12 @@ export default function EventsEditor() {
             </div>
             <FbField label="Tytuł" value={ev.title || ""} onChange={(v) => updateUpcoming(idx, { title: v })} />
             <FbField label="Data i miejsce" value={ev.date_pl || ""} onChange={(v) => updateUpcoming(idx, { date_pl: v, date_en: v })} placeholder="8 marca 2026 · Warszawa" />
-            <FbField label="Krótki opis" value={ev.desc_pl || ""} onChange={(v) => updateUpcoming(idx, { desc_pl: v, desc_en: v })} />
+            <FbTextAreaField
+              label="Krótki opis"
+              value={ev.desc_pl || ""}
+              onChange={(v) => updateUpcoming(idx, { desc_pl: v, desc_en: v })}
+              placeholder="Wpisz opis wydarzenia (może być dłuższy)."
+            />
             <ImageUploadWithResize
               label="Obraz"
               value={ev.img || ""}
@@ -314,6 +495,93 @@ export default function EventsEditor() {
               cropShape="rect"
               aspect={16 / 9}
             />
+            <div style={{ marginTop: 8 }}>
+              <button
+                onClick={() => setExpandedEmailSections((prev) => ({ ...prev, [idx]: !prev[idx] }))}
+                style={s.btn("#e2e8f0", "#334155")}
+                data-tip="Rozwiń wysyłkę email"
+              >
+                {expandedEmailSections[idx] ? "Zwiń wysyłkę email" : "Rozwiń wysyłkę email"}
+              </button>
+            </div>
+            {expandedEmailSections[idx] && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed #cbd5e1" }}>
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                    <label style={s.label}>Opis do maila (announcement)</label>
+                    <button
+                      onClick={() => updateUpcoming(idx, { email_desc_pl: buildAutoEmailDescription(ev) })}
+                      style={{ ...s.btn("#e0f2fe", "#0369a1"), padding: "3px 8px", fontSize: 10 }}
+                      data-tip="Auto-generuj opis"
+                    >
+                      Auto-generuj opis
+                    </button>
+                  </div>
+                  <textarea
+                    style={{
+                      ...s.input,
+                      minHeight: 96,
+                      resize: "vertical",
+                      lineHeight: 1.45,
+                    }}
+                    value={ev.email_desc_pl || ""}
+                    onChange={(e) => updateUpcoming(idx, { email_desc_pl: e.target.value })}
+                    placeholder="Tu wpisz dłuższy opis do maila announcement."
+                  />
+                </div>
+                <FbField
+                  label="Link spotkania (meeting link)"
+                  value={ev.meeting_link_email || ""}
+                  onChange={(v) => updateUpcoming(idx, { meeting_link_email: v })}
+                  placeholder="https://meet.google.com/..."
+                />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                  <button
+                    onClick={() => sendToActiveMembers(idx, "announcement")}
+                    disabled={sendingKey === `${idx}:announcement`}
+                    style={s.btn("#7c3aed", "#fff")}
+                    data-tip="Wyślij announcement"
+                  >
+                    {sendingKey === `${idx}:announcement` ? "Wysyłanie..." : "Wyślij announcement email"}
+                  </button>
+                  <button
+                    onClick={() => openEmailPreview(idx, "announcement")}
+                    disabled={previewingKey === `${idx}:announcement`}
+                    style={{ ...s.btn("#e2e8f0", "#475569"), padding: "3px 8px", fontSize: 10 }}
+                    data-tip="Podgląd announcement"
+                  >
+                    {previewingKey === `${idx}:announcement` ? "..." : "Podgląd"}
+                  </button>
+                  <button
+                    onClick={() => sendToActiveMembers(idx, "meeting_link")}
+                    disabled={sendingKey === `${idx}:meeting_link`}
+                    style={s.btn("#0ea5e9", "#fff")}
+                    data-tip="Wyślij link spotkania"
+                  >
+                    {sendingKey === `${idx}:meeting_link` ? "Wysyłanie..." : "Wyślij link email"}
+                  </button>
+                  <button
+                    onClick={() => openEmailPreview(idx, "meeting_link")}
+                    disabled={previewingKey === `${idx}:meeting_link`}
+                    style={{ ...s.btn("#e2e8f0", "#475569"), padding: "3px 8px", fontSize: 10 }}
+                    data-tip="Podgląd link email"
+                  >
+                    {previewingKey === `${idx}:meeting_link` ? "..." : "Podgląd"}
+                  </button>
+                </div>
+                {(() => {
+                  const announcementStatus = sendStatus[`${idx}:announcement`];
+                  const meetingStatus = sendStatus[`${idx}:meeting_link`];
+                  const status = meetingStatus || announcementStatus;
+                  if (!status) return null;
+                  return (
+                    <div style={{ marginBottom: 8, color: status.ok ? "#15803d" : "#b91c1c", fontSize: 12, fontWeight: 600 }}>
+                      {status.text}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         ))}
         </div>
@@ -389,6 +657,65 @@ export default function EventsEditor() {
           + Dodaj ręcznie
         </button>
       </div>
+      {previewModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,.45)",
+            zIndex: 120,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={() => setPreviewModal(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 740,
+              maxHeight: "85vh",
+              overflow: "auto",
+              background: "#fff",
+              borderRadius: 14,
+              padding: 20,
+              boxShadow: "0 12px 28px rgba(0,0,0,.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}>
+              <h3 style={{ margin: 0, color: "#0f172a", fontSize: 16 }}>{previewModal.title}</h3>
+              <button onClick={() => setPreviewModal(null)} style={s.btn("#e2e8f0", "#475569")} data-tip="Zamknij">Zamknij</button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={s.label}>Temat</label>
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 10, fontSize: 13, color: "#0f172a", fontWeight: 700 }}>
+                {previewModal.subject || "—"}
+              </div>
+            </div>
+            <div>
+              <label style={s.label}>Treść</label>
+              <pre
+                style={{
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 13,
+                  color: "#334155",
+                  fontFamily: "inherit",
+                  lineHeight: 1.5,
+                }}
+              >
+                {previewModal.body || "—"}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

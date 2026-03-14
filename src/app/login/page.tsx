@@ -17,7 +17,9 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sendingRecovery, setSendingRecovery] = useState<"reset" | "generate" | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [showChoice, setShowChoice] = useState(false);
   const [userName, setUserName] = useState("");
@@ -25,6 +27,17 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/panel";
   const supabase = createClient();
+
+  const formatRecoveryError = (message: string) => {
+    const lower = message.toLowerCase();
+    if (lower.includes("redirect_to") || lower.includes("redirect") || lower.includes("not allowed")) {
+      return "Link resetu jest zablokowany przez konfigurację Redirect URLs w Supabase. Dodaj bieżący adres /reset-password do allowlist.";
+    }
+    if (lower.includes("smtp") || lower.includes("mail") || lower.includes("connect") || lower.includes("tls") || lower.includes("ssl")) {
+      return "Supabase nie mógł wysłać e-maila przez SMTP. Sprawdź host/port/login/hasło SMTP (dla Brevo zwykle działa port 587 STARTTLS).";
+    }
+    return `Nie udało się wysłać wiadomości: ${message}`;
+  };
 
   const checkExistingSession = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -52,6 +65,7 @@ function LoginForm() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setNotice("");
     setLoading(true);
 
     const { error: authError } = await supabase.auth.signInWithPassword({
@@ -95,6 +109,49 @@ function LoginForm() {
     await supabase.auth.signOut();
     setShowChoice(false);
     setUserName("");
+  };
+
+  const sendRecoveryEmail = async (
+    mode: "reset" | "generate",
+    emailOverride?: string
+  ) => {
+    setError("");
+    setNotice("");
+
+    const trimmedEmail = (emailOverride ?? email).trim().toLowerCase();
+    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+      setError("Podaj poprawny adres e-mail, aby kontynuować.");
+      return;
+    }
+
+    setSendingRecovery(mode);
+    const redirectTo = `${window.location.origin}/reset-password`;
+    const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
+      trimmedEmail,
+      { redirectTo }
+    );
+
+    if (recoveryError) {
+      console.error("resetPasswordForEmail failed:", recoveryError);
+      setError(formatRecoveryError(recoveryError.message || "Nieznany błąd"));
+      setSendingRecovery(null);
+      return;
+    }
+
+    setNotice(
+      mode === "generate"
+        ? "Jeśli konto istnieje, wysłaliśmy e-mail z linkiem do ustawienia nowego hasła (pierwsze logowanie)."
+        : "Jeśli konto istnieje, wysłaliśmy e-mail z linkiem do resetu hasła."
+    );
+    setSendingRecovery(null);
+  };
+
+  const requestRecoveryEmail = async (mode: "reset" | "generate") => {
+    const typed = window.prompt("Podaj adres e-mail konta:", email.trim());
+    if (typed === null) return;
+    const normalized = typed.trim().toLowerCase();
+    setEmail(normalized);
+    await sendRecoveryEmail(mode, normalized);
   };
 
   if (checkingSession) {
@@ -315,6 +372,18 @@ function LoginForm() {
                   {error}
                 </p>
               )}
+              {notice && (
+                <p
+                  style={{
+                    color: "#166534",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    marginBottom: 12,
+                  }}
+                >
+                  {notice}
+                </p>
+              )}
 
               <button
                 type="submit"
@@ -335,6 +404,56 @@ function LoginForm() {
               >
                 {loading ? "Logowanie..." : "Zaloguj się"}
               </button>
+
+              <div
+                style={{
+                  marginTop: 16,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  alignItems: "center",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => requestRecoveryEmail("reset")}
+                  disabled={sendingRecovery !== null}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: sendingRecovery === "generate" ? "#94a3b8" : "#dc2626",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: sendingRecovery !== null ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                    padding: 0,
+                  }}
+                >
+                  {sendingRecovery === "reset"
+                    ? "Wysyłanie linku..."
+                    : "Nie pamiętasz hasła?"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => requestRecoveryEmail("generate")}
+                  disabled={sendingRecovery !== null}
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    color: sendingRecovery === "reset" ? "#94a3b8" : "#334155",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: sendingRecovery !== null ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                    padding: "8px 12px",
+                  }}
+                >
+                  {sendingRecovery === "generate"
+                    ? "Wysyłanie linku..."
+                    : "Pierwsze logowanie? Wygeneruj hasło"}
+                </button>
+              </div>
             </form>
 
             <a

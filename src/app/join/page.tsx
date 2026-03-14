@@ -37,18 +37,12 @@ const FIELDS_OF_STUDY = [
 ];
 
 
-const STATUSES = [
-  { value: "student_1", label: "Student/ka — 1. rok" },
-  { value: "student_2", label: "Student/ka — 2. rok" },
-  { value: "student_3", label: "Student/ka — 3. rok" },
-  { value: "student_4", label: "Student/ka — 4. rok" },
-  { value: "student_5", label: "Student/ka — 5. rok" },
-  { value: "student_6", label: "Student/ka — 6. rok" },
-  { value: "absolwent_1", label: "Absolwent/ka — 1. rok po ukończeniu" },
-  { value: "absolwent_2", label: "Absolwent/ka — 2. rok po ukończeniu" },
-  { value: "absolwent_3", label: "Absolwent/ka — 3. rok po ukończeniu" },
-  { value: "inny", label: "Inny" },
+const STATUS_OPTIONS = [
+  { value: "student", label: "Student/ka" },
+  { value: "absolwent", label: "Absolwent/ka" },
 ];
+const YEAR_OPTIONS_STUDENT = ["1", "2", "3", "4", "5", "6"];
+const YEAR_OPTIONS_ABSOLWENT = ["rok po", "dwa lata po", "trzy lata po"];
 
 const STATUTE_URL = "https://drive.google.com/file/d/1xMIOn-B4PW6x1xN2YYAa5sVj8xysr4a4/view?usp=drive_link";
 
@@ -105,7 +99,8 @@ export default function JoinPage() {
     address: "", citizenship: "polskie",
     university: "", university_other: "",
     field_of_study: "", field_of_study_other: "",
-    status: "", status_other: "",
+    status: "",
+    year_of_study: "",
     studies_start_date: "", studies_end_date: "",
     password: "", password_confirm: "",
     statute_consent: false, rodo_consent: false,
@@ -149,7 +144,7 @@ export default function JoinPage() {
 
   const validateStep4 = () => {
     if (!form.status) return "Wybierz status";
-    if (form.status === "inny" && !form.status_other.trim()) return "Podaj status";
+    if (!form.year_of_study) return "Wybierz rok studiów";
     const uni = form.university === "Inna" ? form.university_other : form.university;
     if (!uni.trim()) return "Wybierz uczelnię";
     const field = form.field_of_study === "Inny" ? form.field_of_study_other : form.field_of_study;
@@ -190,7 +185,8 @@ export default function JoinPage() {
     try {
       const university = (form.university === "Inna" ? form.university_other : form.university).trim();
       const field_of_study = (form.field_of_study === "Inny" ? form.field_of_study_other : form.field_of_study).trim();
-      const status = form.status === "inny" ? (form.status_other.trim() || "inny") : form.status;
+      const status = form.status;
+      const year_of_study = form.year_of_study;
 
       const res = await fetch("/api/join", {
         method: "POST",
@@ -207,6 +203,7 @@ export default function JoinPage() {
           university,
           field_of_study,
           status,
+          year_of_study,
           address: form.address.trim(),
           citizenship: form.citizenship.trim(),
           studies_start_date: form.studies_start_date || null,
@@ -411,17 +408,35 @@ export default function JoinPage() {
             <h3 style={s.sectionTitle}>Informacje akademickie</h3>
             <div style={{ marginBottom: 20 }}>
               <label style={s.label}>Status<span style={s.required}>*</span></label>
-              <select style={s.input} value={form.status} onChange={f("status")} onFocus={focusStyle} onBlur={blurStyle}>
+              <select
+                style={s.input}
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value, year_of_study: "" })}
+                onFocus={focusStyle}
+                onBlur={blurStyle}
+              >
                 <option value="">— Wybierz status —</option>
-                {STATUSES.map((st) => <option key={st.value} value={st.value}>{st.label}</option>)}
+                {STATUS_OPTIONS.map((st) => <option key={st.value} value={st.value}>{st.label}</option>)}
               </select>
             </div>
-            {form.status === "inny" && (
-              <div style={{ marginBottom: 20 }}>
-                <label style={s.label}>Podaj status<span style={s.required}>*</span></label>
-                <input style={s.input} value={form.status_other} onChange={f("status_other")} placeholder="np. rezydent, stażysta" onFocus={focusStyle} onBlur={blurStyle} />
-              </div>
-            )}
+            <div style={{ marginBottom: 20 }}>
+              <label style={s.label}>{form.status === "absolwent" ? "Lata po studiach" : "Rok studiów"}<span style={s.required}>*</span></label>
+              <select
+                style={s.input}
+                value={form.year_of_study}
+                onChange={f("year_of_study")}
+                onFocus={focusStyle}
+                onBlur={blurStyle}
+                disabled={!form.status}
+              >
+                <option value="">— Wybierz —</option>
+                {(form.status === "absolwent" ? YEAR_OPTIONS_ABSOLWENT : YEAR_OPTIONS_STUDENT).map((y) => (
+                  <option key={y} value={y}>
+                    {form.status === "absolwent" ? y : `${y}. rok`}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div style={{ marginBottom: 20 }}>
               <label style={s.label}>Uczelnia / Afiliacja<span style={s.required}>*</span></label>
               <select style={s.input} value={form.university} onChange={f("university")} onFocus={focusStyle} onBlur={blurStyle}>
