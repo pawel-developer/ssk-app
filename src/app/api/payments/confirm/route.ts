@@ -44,8 +44,7 @@ export async function POST(request: NextRequest) {
     ? new Date(memberProfile.fee_valid_until)
     : null;
 
-  const baseDate =
-    currentValidUntil && currentValidUntil > now ? currentValidUntil : now;
+  const baseDate = currentValidUntil ?? now;
 
   const validUntil = new Date(baseDate);
   validUntil.setFullYear(validUntil.getFullYear() + 1);

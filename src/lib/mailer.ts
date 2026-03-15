@@ -162,7 +162,10 @@ function renderTemplateToHtml(text: string, vars: Record<string, string>) {
   return textToParagraphHtml(escapeHtml(rendered));
 }
 
-const LOGO_URL = "https://studenckiekardio.pl/img/ssk-logo-sm.png";
+const LOGO_URL =
+  (typeof process.env.NEXT_PUBLIC_APP_URL === "string" && process.env.NEXT_PUBLIC_APP_URL.trim()
+    ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
+    : "https://studenckiekardio.pl") + "/favicon-192x192.png";
 const ORG_NAME = "Studenckie Stowarzyszenie Kardiologiczne";
 
 export function wrapInBrandedLayout(innerHtml: string, options?: { ctaLabel?: string; ctaUrl?: string }) {
@@ -175,7 +178,7 @@ export function wrapInBrandedLayout(innerHtml: string, options?: { ctaLabel?: st
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;padding:40px 16px;">
   <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
     <div style="background:#0f172a;padding:24px;text-align:center;">
-      <img src="${LOGO_URL}" alt="SSK" width="48" height="48" style="display:inline-block;" />
+      <img src="${LOGO_URL}" alt="SSK" width="56" height="56" style="display:inline-block;border-radius:50%;" />
       <div style="color:#ffffff;font-size:16px;font-weight:700;margin-top:8px;">${ORG_NAME}</div>
     </div>
     <div style="padding:32px 24px;color:#0f172a;font-size:14px;line-height:1.6;">
@@ -346,6 +349,21 @@ export async function sendEventMeetingLinkEmail(
       }),
       eventMeetingLink ? { ctaLabel: "Dołącz do spotkania", ctaUrl: eventMeetingLink } : undefined
     ),
+  });
+}
+
+export async function sendBirthdayEmail(
+  toEmail: string,
+  firstName: string,
+  templates?: EmailTemplatesContent
+) {
+  const currentTemplates = templates ?? (await loadEmailTemplates());
+  const tpl = currentTemplates.birthday;
+
+  await sendBrevoEmail({
+    to: [{ email: toEmail, name: firstName }],
+    subject: tpl.subject,
+    htmlContent: wrapInBrandedLayout(renderTemplateToHtml(tpl.body, { firstName })),
   });
 }
 
