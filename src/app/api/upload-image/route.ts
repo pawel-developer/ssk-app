@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
-import { writeFile } from "fs/promises";
-import path from "path";
+import { createAdminClient } from "@/lib/supabase-admin";
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,11 +35,24 @@ export async function POST(req: NextRequest) {
       : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const outputName = `${safeName}.webp`;
-    const outputPath = path.join(process.cwd(), "public", "img", outputName);
 
-    await writeFile(outputPath, webpBuffer);
+    const supabase = createAdminClient();
+    const { error: uploadError } = await supabase.storage
+      .from("event-images")
+      .upload(outputName, webpBuffer, {
+        contentType: "image/webp",
+        upsert: true,
+      });
 
-    return NextResponse.json({ path: `/img/${outputName}` });
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("event-images")
+      .getPublicUrl(outputName);
+
+    return NextResponse.json({ path: urlData.publicUrl });
   } catch (err) {
     console.error("Upload error:", err);
     return NextResponse.json(
