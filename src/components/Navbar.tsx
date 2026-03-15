@@ -55,7 +55,7 @@ export default function Navbar() {
         <div className="nav-container">
           <a href="#hero" className="nav-logo">
             <Image
-              src="/img/logo.webp"
+              src="/img/ssk-logo-sm.webp"
               alt="SSK Logo"
               width={48}
               height={48}
@@ -71,8 +71,20 @@ export default function Navbar() {
                 </a>
               </li>
             ))}
+            <li className="nav-link-mobile-panel">
+              <a href="/login" onClick={closeMobile}>
+                {lang === "pl" ? "Panel" : "Panel"}
+              </a>
+            </li>
           </ul>
           <div className="nav-actions">
+            <a
+              href="/login"
+              className="btn btn-primary btn-sm"
+              style={{ padding: "6px 16px", fontSize: 13, borderRadius: 8 }}
+            >
+              {lang === "pl" ? "Panel" : "Panel"}
+            </a>
             <button className="lang-toggle" onClick={toggleLang}>
               <span className="lang-flag">{lang === "pl" ? "🇬🇧" : "🇵🇱"}</span>
               <span className="lang-label">{lang === "pl" ? "EN" : "PL"}</span>

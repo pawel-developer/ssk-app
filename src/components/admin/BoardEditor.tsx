@@ -53,7 +53,7 @@ function resolveImg(img: string): string {
 }
 
 const s = {
-  card: { background: "#fff", borderRadius: 10, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 12 },
+  card: { background: "#fff", borderRadius: 10, padding: 16, boxShadow: "0 4px 24px rgba(0,0,0,.12)", marginBottom: 12 },
   groupTitle: { fontSize: 14, fontWeight: 700 as const, color: "#0f172a", marginBottom: 10 },
   membersGrid: { display: "grid" as const, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 },
   input: { padding: "3px 6px", border: "1px solid #e2e8f0", borderRadius: 4, fontSize: 11, fontFamily: "inherit", outline: "none", width: "100%", boxSizing: "border-box" as const },
@@ -264,7 +264,7 @@ export default function BoardEditor() {
   return (
     <div style={{ padding: "0 24px 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-        <p style={{ color: "#64748b", fontSize: 13 }}>Edytuj członków zarządu, komisji rewizyjnej i opiekunów. Kliknij &quot;Zmień&quot; aby przesłać zdjęcie.</p>
+        <p style={{ color: "#94a3b8", fontSize: 13 }}>Edytuj członków zarządu, komisji rewizyjnej i opiekunów. Kliknij &quot;Zmień&quot; aby przesłać zdjęcie.</p>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {msg && <span style={{ fontSize: 13, color: msg.startsWith("Błąd") ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{msg}</span>}
           <button data-tip="Zapisz" onClick={save} disabled={saving} style={s.btn("#16a34a", "#fff")}>

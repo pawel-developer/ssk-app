@@ -148,7 +148,7 @@ export default async function Home() {
           </div>
         </div>
         <div className="hero-logo-float">
-          <Image src="/img/logo.webp" alt="SSK Logo" width={450} height={450} />
+          <Image src="/img/ssk-logo-2xl.webp" alt="SSK Logo" width={450} height={450} />
         </div>
       </section>
 
@@ -341,7 +341,7 @@ export default async function Home() {
         <div className="container">
           <div className="footer-grid">
             <div className="footer-brand">
-              <Image src="/img/logo.webp" alt="SSK Logo" width={56} height={56} className="footer-logo" />
+              <Image src="/img/ssk-logo-lg.webp" alt="SSK Logo" width={56} height={56} className="footer-logo" />
               <h3>Studenckie Stowarzyszenie<br />Kardiologiczne</h3>
               <p data-pl="Łączymy studentów z pasją do kardiologii." data-en="Uniting students with a passion for cardiology.">
                 Łączymy studentów z pasją do kardiologii.

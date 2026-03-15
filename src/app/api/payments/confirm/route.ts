@@ -40,25 +40,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nie można aktywować składki dla byłego członka" }, { status: 400 });
   }
 
-  let validUntil: Date;
+  const currentValidUntil = memberProfile?.fee_valid_until
+    ? new Date(memberProfile.fee_valid_until)
+    : null;
 
-  if (memberProfile?.join_date) {
-    const joinDate = new Date(memberProfile.join_date);
-    const currentValidUntil = memberProfile.fee_valid_until
-      ? new Date(memberProfile.fee_valid_until)
-      : new Date(0);
-    const baseDate = currentValidUntil > now ? currentValidUntil : now;
+  const baseDate =
+    currentValidUntil && currentValidUntil > now ? currentValidUntil : now;
 
-    const anniversary = new Date(joinDate);
-    anniversary.setFullYear(baseDate.getFullYear());
-    if (anniversary <= baseDate) {
-      anniversary.setFullYear(anniversary.getFullYear() + 1);
-    }
-    validUntil = anniversary;
-  } else {
-    validUntil = new Date(now);
-    validUntil.setFullYear(validUntil.getFullYear() + 1);
-  }
+  const validUntil = new Date(baseDate);
+  validUntil.setFullYear(validUntil.getFullYear() + 1);
 
   const { error: updateError } = await admin
     .from("payment_confirmations")

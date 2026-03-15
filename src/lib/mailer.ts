@@ -162,6 +162,33 @@ function renderTemplateToHtml(text: string, vars: Record<string, string>) {
   return textToParagraphHtml(escapeHtml(rendered));
 }
 
+const LOGO_URL = "https://studenckiekardio.pl/img/ssk-logo-sm.png";
+const ORG_NAME = "Studenckie Stowarzyszenie Kardiologiczne";
+
+export function wrapInBrandedLayout(innerHtml: string, options?: { ctaLabel?: string; ctaUrl?: string }) {
+  const ctaBlock = options?.ctaUrl && options?.ctaLabel
+    ? `<div style="text-align:center;margin:24px 0;">
+        <a href="${options.ctaUrl}" style="display:inline-block;padding:14px 28px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:15px;">${options.ctaLabel}</a>
+      </div>`
+    : "";
+
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;padding:40px 16px;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+    <div style="background:#0f172a;padding:24px;text-align:center;">
+      <img src="${LOGO_URL}" alt="SSK" width="48" height="48" style="display:inline-block;" />
+      <div style="color:#ffffff;font-size:16px;font-weight:700;margin-top:8px;">${ORG_NAME}</div>
+    </div>
+    <div style="padding:32px 24px;color:#0f172a;font-size:14px;line-height:1.6;">
+      ${innerHtml}
+      ${ctaBlock}
+    </div>
+    <div style="background:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;">&copy; ${new Date().getFullYear()} ${ORG_NAME}</p>
+    </div>
+  </div>
+</div>`;
+}
+
 export async function sendBrevoEmail(params: SendBrevoEmailParams) {
   const apiKey = process.env.BREVO_API_KEY;
   const sender = getSender();
@@ -202,7 +229,7 @@ export async function sendWelcomeEmail(
   await sendBrevoEmail({
     to: [{ email: toEmail, name: firstName }],
     subject: tpl.subject,
-    htmlContent: renderTemplateToHtml(tpl.body, { firstName }),
+    htmlContent: wrapInBrandedLayout(renderTemplateToHtml(tpl.body, { firstName })),
   });
 }
 
@@ -218,7 +245,7 @@ export async function sendPaymentConfirmedEmail(
   await sendBrevoEmail({
     to: [{ email: toEmail, name: firstName }],
     subject: tpl.subject,
-    htmlContent: renderTemplateToHtml(tpl.body, { firstName, feeValidUntil }),
+    htmlContent: wrapInBrandedLayout(renderTemplateToHtml(tpl.body, { firstName, feeValidUntil })),
   });
 }
 
@@ -237,7 +264,7 @@ export async function sendPaymentRejectedEmail(
   await sendBrevoEmail({
     to: [{ email: toEmail, name: firstName }],
     subject: tpl.subject,
-    htmlContent: renderTemplateToHtml(tpl.body, { firstName, reasonLine }),
+    htmlContent: wrapInBrandedLayout(renderTemplateToHtml(tpl.body, { firstName, reasonLine })),
   });
 }
 
@@ -256,7 +283,7 @@ export async function sendPaymentReminderEmail(
   await sendBrevoEmail({
     to: [{ email: toEmail, name: firstName }],
     subject: tpl.subject,
-    htmlContent: renderTemplateToHtml(tpl.body, { firstName, feeValidUntilLine }),
+    htmlContent: wrapInBrandedLayout(renderTemplateToHtml(tpl.body, { firstName, feeValidUntilLine })),
   });
 }
 
@@ -282,12 +309,15 @@ export async function sendEventAnnouncementEmail(
       eventEmailDescriptionLine,
       firstName,
     }),
-    htmlContent: renderTemplateToHtml(tpl.body, {
-      eventTitle,
-      eventFbUrl,
-      eventEmailDescriptionLine,
-      firstName,
-    }),
+    htmlContent: wrapInBrandedLayout(
+      renderTemplateToHtml(tpl.body, {
+        eventTitle,
+        eventFbUrl,
+        eventEmailDescriptionLine,
+        firstName,
+      }),
+      eventFbUrl ? { ctaLabel: "Zobacz wydarzenie", ctaUrl: eventFbUrl } : undefined
+    ),
   });
 }
 
@@ -308,11 +338,14 @@ export async function sendEventMeetingLinkEmail(
       eventMeetingLink,
       firstName,
     }),
-    htmlContent: renderTemplateToHtml(tpl.body, {
-      eventTitle,
-      eventMeetingLink,
-      firstName,
-    }),
+    htmlContent: wrapInBrandedLayout(
+      renderTemplateToHtml(tpl.body, {
+        eventTitle,
+        eventMeetingLink,
+        firstName,
+      }),
+      eventMeetingLink ? { ctaLabel: "Dołącz do spotkania", ctaUrl: eventMeetingLink } : undefined
+    ),
   });
 }
 

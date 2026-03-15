@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import Image from "next/image";
@@ -63,9 +63,7 @@ export default function AdminPanel() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [importModal, setImportModal] = useState(false);
-  const [importResult, setImportResult] = useState<{ created: number; updated: number; skipped: number; errors: string[] } | null>(null);
-  const [importing, setImporting] = useState(false);
+  
   const [copiedEmails, setCopiedEmails] = useState(false);
   const [sortKey, setSortKey] = useState<string>("last_name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -74,7 +72,8 @@ export default function AdminPanel() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [generatingCertificates, setGeneratingCertificates] = useState(false);
   const [remindingAll, setRemindingAll] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  
   const router = useRouter();
   const supabase = createClient();
 
@@ -324,28 +323,6 @@ export default function AdminPanel() {
     downloadCsv(rows, `ssk-czlonkowie-podstawowe-${new Date().toISOString().split("T")[0]}.csv`);
   };
 
-  const handleImport = async () => {
-    const file = fileRef.current?.files?.[0];
-    if (!file) return;
-    setImporting(true);
-    setImportResult(null);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await fetch("/api/members/import", { method: "POST", body: formData });
-      const data = await res.json();
-      if (res.ok) {
-        setImportResult(data);
-        loadData();
-      } else {
-        setImportResult({ created: 0, updated: 0, skipped: 0, errors: [data.error || "Nieznany błąd"] });
-      }
-    } catch (err) {
-      setImportResult({ created: 0, updated: 0, skipped: 0, errors: [err instanceof Error ? err.message : "Błąd sieci"] });
-    }
-    setImporting(false);
-  };
-
   const handleGenerateCertificates = async () => {
     setGeneratingCertificates(true);
     try {
@@ -367,15 +344,24 @@ export default function AdminPanel() {
   };
 
   const handleRemindAllInactive = async () => {
-    const inactiveCount = members.filter((m) => !isMembershipActiveByDate(m.fee_valid_until)).length;
+    const inactive = members.filter((m) => !m.is_archived && !isMembershipActiveByDate(m.fee_valid_until));
+    const inactiveCount = inactive.length;
+    const withEmail = inactive.filter((m) => m.email).length;
+
     if (inactiveCount === 0) {
       alert("Brak nieaktywnych członków do przypomnienia.");
       return;
     }
 
-    if (!confirm(`Wysłać przypomnienie o składce do wszystkich nieaktywnych członków (${inactiveCount})?`)) {
-      return;
-    }
+    const confirmed = confirm(
+      `⚠️ UWAGA: Masowa wysyłka e-maili\n\n` +
+      `Liczba nieaktywnych członków: ${inactiveCount}\n` +
+      `Z adresem e-mail: ${withEmail}\n` +
+      `Bez adresu e-mail (pominiętych): ${inactiveCount - withEmail}\n\n` +
+      `Każdy z nich otrzyma e-mail z przypomnieniem o opłaceniu składki.\n\n` +
+      `Czy na pewno chcesz kontynuować?`
+    );
+    if (!confirmed) return;
 
     setRemindingAll(true);
     try {
@@ -453,16 +439,16 @@ export default function AdminPanel() {
 
   if (loading || (!isAdmin && !error)) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9" }}>
-        <p style={{ color: "#64748b" }}>Ładowanie...</p>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }}>
+        <p style={{ color: "#94a3b8" }}>Ładowanie...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9", padding: 20 }}>
-        <div style={{ background: "#fff", borderRadius: 16, padding: 40, boxShadow: "0 4px 24px rgba(0,0,0,.08)", maxWidth: 500, textAlign: "center" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)", padding: 20 }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 40, boxShadow: "0 8px 32px rgba(0,0,0,.2)", maxWidth: 500, textAlign: "center" }}>
           <p style={{ fontSize: 40, marginBottom: 16 }}>⚠️</p>
           <h2 style={{ fontFamily: "var(--font-serif)", fontSize: 20, color: "#0f172a", marginBottom: 12 }}>Błąd</h2>
           <p style={{ color: "#dc2626", fontSize: 14, marginBottom: 20 }}>{error}</p>
@@ -489,28 +475,30 @@ export default function AdminPanel() {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f1f5f9" }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }}>
       {/* Top bar */}
-      <div style={{ background: "#fff", padding: "16px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Image src="/img/logo.webp" alt="SSK" width={36} height={36} />
-          <h1 style={{ fontSize: 20, color: "#0f172a", margin: 0 }}>Panel Admina SSK</h1>
+      <div style={{ background: "rgba(15,23,42,.6)", backdropFilter: "blur(12px)", padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <a data-tip-b="Idź na stronę" href="/" style={{ ...st.btn("rgba(255,255,255,.06)", "#94a3b8"), textDecoration: "none", display: "inline-flex", alignItems: "center", border: "1px solid rgba(255,255,255,.12)" }}>← Strona główna</a>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <Image src="/img/ssk-logo-white-sm.webp" alt="SSK" width={36} height={36} />
+          <h1 style={{ fontSize: 20, color: "#fff", margin: 0 }}>Panel Admina SSK</h1>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button data-tip-b="Odśwież dane" onClick={() => { setLoading(true); loadData(); }} style={st.btn("#0369a1", "#fff")}>Odśwież</button>
           <button data-tip-b="Przejdź do panelu członka" onClick={() => router.push("/panel")} style={st.btn("#0ea5e9", "#fff")}>Panel członka</button>
-          <a data-tip-b="Idź na stronę" href="/" style={{ ...st.btn("#e2e8f0", "#475569"), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Strona główna</a>
-          <button data-tip-b="Wyloguj" onClick={handleLogout} style={st.btn("#dc2626", "#fff")}>Wyloguj</button>
+          <button data-tip-b="Wyloguj" onClick={handleLogout} style={{ ...st.btn("rgba(255,255,255,.06)", "#94a3b8"), border: "1px solid rgba(255,255,255,.12)" }}>Wyloguj</button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 0, padding: "0 24px", background: "#fff", borderBottom: "1px solid #e2e8f0", overflowX: "auto" }}>
+      <div style={{ display: "flex", gap: 0, padding: "0 24px", background: "rgba(15,23,42,.4)", borderBottom: "1px solid rgba(255,255,255,.06)", overflowX: "auto" }}>
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: "14px 24px", border: "none", background: "none", cursor: "pointer",
             fontWeight: 600, fontSize: 14, fontFamily: "inherit", whiteSpace: "nowrap",
-            color: tab === t.key ? "#dc2626" : "#64748b",
+            color: tab === t.key ? "#fff" : "#64748b",
             borderBottom: tab === t.key ? "3px solid #dc2626" : "3px solid transparent",
           }}>
             {t.label}
@@ -521,23 +509,23 @@ export default function AdminPanel() {
       {/* Stats — only on members/pending tabs */}
       {(tab === "members" || tab === "pending" || tab === "past_members") && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, padding: 24 }}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
             <div style={{ fontSize: 32, fontWeight: 700, color: "#0f172a" }}>{members.filter((m) => !m.is_archived).length}</div>
             <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Obecnych członków</div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
             <div style={{ fontSize: 32, fontWeight: 700, color: "#16a34a" }}>{members.filter((m) => !m.is_archived && isMembershipActiveByDate(m.fee_valid_until)).length}</div>
             <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Aktywne składki</div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
             <div style={{ fontSize: 32, fontWeight: 700, color: "#dc2626" }}>{members.filter((m) => !m.is_archived && !isMembershipActiveByDate(m.fee_valid_until)).length}</div>
             <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Wygasłe</div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
             <div style={{ fontSize: 32, fontWeight: 700, color: "#f59e0b" }}>{pending.length}</div>
             <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Oczekujące potwierdzenia</div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
             <div style={{ fontSize: 32, fontWeight: 700, color: "#6b7280" }}>{members.filter((m) => m.is_archived).length}</div>
             <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Byli członkowie</div>
           </div>
@@ -551,38 +539,56 @@ export default function AdminPanel() {
             <input
               placeholder="Szukaj po nazwisku, emailu, uczelni..."
               value={search} onChange={(e) => setSearch(e.target.value)}
-              style={{ padding: "10px 14px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, minWidth: 280, outline: "none", fontFamily: "inherit" }}
+              style={{ padding: "10px 14px", border: "2px solid rgba(255,255,255,.12)", borderRadius: 8, fontSize: 14, minWidth: 280, outline: "none", fontFamily: "inherit", background: "rgba(255,255,255,.06)", color: "#fff" }}
             />
             {tab === "members" && (
-              <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} style={{ padding: "10px 14px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }}>
+              <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} style={{ padding: "10px 14px", border: "2px solid rgba(255,255,255,.12)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: "rgba(255,255,255,.06)", color: "#fff" }}>
                 <option value="all">Wszystkie</option>
                 <option value="active">Aktywne składki</option>
                 <option value="expired">Wygasłe</option>
               </select>
             )}
-            <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              {tab === "members" && <button data-tip="Kopiuj emaile aktywnych" onClick={() => {
+            <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+              {tab === "members" && <button onClick={() => {
                 const activeEmails = members.filter((m) => !m.is_archived && isMembershipActiveByDate(m.fee_valid_until)).map((m) => m.email).filter(Boolean);
                 navigator.clipboard.writeText(activeEmails.join(", "));
                 setCopiedEmails(true);
                 setTimeout(() => setCopiedEmails(false), 2000);
-              }} style={st.btn("#16a34a", "#fff")}>
-                {copiedEmails ? "Skopiowano!" : `Kopiuj emaile aktywnych (${members.filter((m) => !m.is_archived && isMembershipActiveByDate(m.fee_valid_until)).length})`}
+              }} style={{ ...st.btn("rgba(255,255,255,.08)", "#cbd5e1"), border: "1px solid rgba(255,255,255,.12)", minWidth: 110 }}>
+                {copiedEmails ? "Skopiowano!" : "Kopiuj maile"}
               </button>}
-              {tab === "members" && <button data-tip="CSV: imię, nazwisko, email" onClick={handleExportBasic} style={st.btn("#0369a1", "#fff")}>Eksport podstawowy</button>}
-              {tab === "members" && <button data-tip="CSV ze wszystkimi polami" onClick={handleExport} style={st.btn("#475569", "#fff")}>Eksport pełny CSV</button>}
-              {tab === "members" && <button data-tip="Import z CSV" onClick={() => { setImportModal(true); setImportResult(null); }} style={st.btn("#7c3aed", "#fff")}>Import CSV</button>}
-              {tab === "members" && <button data-tip="Generuj certyfikaty dla aktywnych członków" onClick={handleGenerateCertificates} disabled={generatingCertificates} style={st.btn("#0f766e", "#fff")}>
-                {generatingCertificates ? "Generowanie..." : "Generuj certyfikaty aktywnych"}
+              {tab === "members" && (
+                <div style={{ position: "relative" }}>
+                  <button onClick={() => setShowExportMenu((v) => !v)} style={{ ...st.btn("rgba(255,255,255,.08)", "#cbd5e1"), border: "1px solid rgba(255,255,255,.12)", minWidth: 110 }}>
+                    Eksport CSV ▾
+                  </button>
+                  {showExportMenu && (
+                    <>
+                      <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setShowExportMenu(false)} />
+                      <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#fff", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,.2)", zIndex: 100, minWidth: 200, overflow: "hidden" }}>
+                        <button onClick={() => { handleExportBasic(); setShowExportMenu(false); }} style={{ display: "block", width: "100%", padding: "10px 16px", border: "none", background: "none", textAlign: "left", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#1e293b", fontFamily: "inherit" }}>
+                          Podstawowy (imię, nazwisko, email)
+                        </button>
+                        <div style={{ height: 1, background: "#e2e8f0" }} />
+                        <button onClick={() => { handleExport(); setShowExportMenu(false); }} style={{ display: "block", width: "100%", padding: "10px 16px", border: "none", background: "none", textAlign: "left", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#1e293b", fontFamily: "inherit" }}>
+                          Pełny (wszystkie pola)
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              {tab === "members" && <button onClick={handleGenerateCertificates} disabled={generatingCertificates} style={{ ...st.btn("rgba(255,255,255,.08)", "#cbd5e1"), border: "1px solid rgba(255,255,255,.12)", minWidth: 110 }}>
+                {generatingCertificates ? "Generowanie..." : "Certyfikaty"}
               </button>}
-              {tab === "members" && <button data-tip="Wyślij przypomnienia do nieaktywnych" onClick={handleRemindAllInactive} disabled={remindingAll} style={st.btn("#f59e0b", "#fff")}>
-                {remindingAll ? "Wysyłanie..." : "Przypomnij wszystkim nieaktywnym"}
+              {tab === "members" && <button onClick={handleRemindAllInactive} disabled={remindingAll} style={{ ...st.btn("rgba(255,255,255,.08)", "#cbd5e1"), border: "1px solid rgba(255,255,255,.12)", minWidth: 110 }}>
+                {remindingAll ? "Wysyłanie..." : "Przypomnienie składki"}
               </button>}
             </div>
           </div>
 
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.06)", fontSize: 14 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,.12)", fontSize: 14 }}>
               <thead>
                 <tr>
                   {([
@@ -667,7 +673,7 @@ export default function AdminPanel() {
       {tab === "pending" && (
         <div style={{ padding: "0 24px 24px" }}>
           {pending.length === 0 ? (
-            <div style={{ background: "#fff", borderRadius: 12, padding: 40, textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <div style={{ background: "#fff", borderRadius: 12, padding: 40, textAlign: "center", boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
               <p style={{ color: "#94a3b8", fontSize: 16 }}>Brak oczekujących potwierdzeń</p>
             </div>
           ) : (
@@ -676,7 +682,7 @@ export default function AdminPanel() {
                 const prof = c.profiles;
                 const memberExpired = prof ? !isMembershipActiveByDate(prof.fee_valid_until) : null;
                 return (
-                  <div key={c.id} style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+                  <div key={c.id} style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 4px 24px rgba(0,0,0,.12)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
                     <div style={{ minWidth: 200 }}>
                       <p style={{ fontWeight: 700, color: "#0f172a", margin: 0, fontSize: 15 }}>
                         {prof?.first_name} {prof?.last_name}
@@ -726,39 +732,7 @@ export default function AdminPanel() {
       {/* ==================== EVENTS TAB ==================== */}
       {tab === "events" && <EventsEditor />}
 
-      {/* ==================== IMPORT MODAL ==================== */}
-      {importModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 100, display: "flex", justifyContent: "center", alignItems: "center", padding: 16 }} onClick={() => setImportModal(false)}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 32, maxWidth: 500, width: "100%" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, marginBottom: 8, fontFamily: "var(--font-serif)", color: "#0f172a" }}>Import członków z CSV</h3>
-            <p style={{ color: "#64748b", fontSize: 13, marginBottom: 16 }}>
-              Plik CSV powinien zawierać nagłówki: <code>email, first_name, last_name, phone, university, field_of_study, year_of_study, status, join_date, fee_active, fee_valid_until, last_payment_date</code>.
-              Nowi członkowie (nieistniejący email) zostaną utworzeni z tymczasowym hasłem. Istniejący zostaną zaktualizowani.
-            </p>
-            <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ marginBottom: 16, fontSize: 14 }} />
-
-            {importResult && (
-              <div style={{ background: importResult.errors.length > 0 ? "#fef2f2" : "#f0fdf4", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
-                <p style={{ margin: 0, fontWeight: 600 }}>Utworzono: {importResult.created} · Zaktualizowano: {importResult.updated} · Pominięto: {importResult.skipped}</p>
-                {importResult.errors.length > 0 && (
-                  <div style={{ marginTop: 8, color: "#dc2626" }}>
-                    <p style={{ fontWeight: 600, margin: "0 0 4px" }}>Błędy:</p>
-                    {importResult.errors.slice(0, 10).map((e, i) => <p key={i} style={{ margin: 0, fontSize: 12 }}>{e}</p>)}
-                    {importResult.errors.length > 10 && <p style={{ margin: 0, fontSize: 12 }}>...i {importResult.errors.length - 10} więcej</p>}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button data-tip="Zamknij" onClick={() => setImportModal(false)} style={st.btn("#e2e8f0", "#475569")}>Zamknij</button>
-              <button data-tip="Importuj plik" onClick={handleImport} disabled={importing} style={st.btn("#7c3aed", "#fff")}>
-                {importing ? "Importowanie..." : "Importuj"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      
       {/* ==================== FILE PREVIEW MODAL ==================== */}
       {(previewUrl || previewLoading) && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 200, display: "flex", justifyContent: "center", alignItems: "center", padding: 16 }} onClick={() => { setPreviewUrl(null); setPreviewFileName(""); }}>

@@ -100,6 +100,45 @@ function formatMemberValue(key: string, value: unknown) {
   return String(value);
 }
 
+const UNIVERSITIES = [
+  "Collegium Medicum Uniwersytetu Jagiellońskiego",
+  "Collegium Medicum Uniwersytetu Jana Kochanowskiego w Kielcach",
+  "Collegium Medicum Uniwersytetu Mikołaja Kopernika w Bydgoszczy",
+  "Collegium Medicum Uniwersytetu Zielonogórskiego",
+  "Gdański Uniwersytet Medyczny",
+  "Pomorski Uniwersytet Medyczny w Szczecinie",
+  "Uczelnia Łazarskiego",
+  "Uniwersytet Andrzeja Frycza Modrzewskiego w Krakowie",
+  "Uniwersytet Kaliski Collegium Medicum",
+  "Uniwersytet Kardynała Stefana Wyszyńskiego w Warszawie",
+  "Uniwersytet Medyczny im. Karola Marcinkowskiego w Poznaniu",
+  "Uniwersytet Medyczny im. Piastów Śląskich we Wrocławiu",
+  "Uniwersytet Medyczny w Białymstoku",
+  "Uniwersytet Medyczny w Lublinie",
+  "Uniwersytet Medyczny w Łodzi",
+  "Uniwersytet Opolski",
+  "Uniwersytet Radomski",
+  "Uniwersytet w Siedlcach",
+  "Warszawski Uniwersytet Medyczny",
+  "Akademia Śląska",
+  "Śląski Uniwersytet Medyczny (Katowice)",
+  "Śląski Uniwersytet Medyczny (Zabrze)",
+  "Inna",
+];
+
+const FIELDS_OF_STUDY = [
+  "Lekarski",
+  "Lekarsko-dentystyczny",
+  "Farmacja",
+  "Analityka medyczna",
+  "Pielęgniarstwo",
+  "Ratownictwo medyczne",
+  "Fizjoterapia",
+  "Zdrowie publiczne",
+  "Elektroradiologia",
+  "Inny",
+];
+
 const STATUS_OPTIONS = [
   { value: "student", label: "Student/ka" },
   { value: "absolwent", label: "Absolwent/ka" },
@@ -382,15 +421,15 @@ export default function MemberPanel() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
-        <p style={{ color: "#64748b" }}>Ładowanie...</p>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }}>
+        <p style={{ color: "#94a3b8" }}>Ładowanie...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc", padding: 20 }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)", padding: 20 }}>
         <div style={{ background: "#fff", borderRadius: 16, padding: 40, boxShadow: "0 4px 24px rgba(0,0,0,.08)", maxWidth: 500, textAlign: "center" }}>
           <p style={{ fontSize: 40, marginBottom: 16 }}>⚠️</p>
           <h2 style={{ fontFamily: "var(--font-serif)", fontSize: 20, color: "#0f172a", marginBottom: 12 }}>Błąd</h2>
@@ -459,21 +498,21 @@ export default function MemberPanel() {
   const editableKeys = new Set(["email", "phone", "university", "field_of_study", "status", "year_of_study"]);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)", display: "flex", flexDirection: "column" }}>
       {/* Nav */}
-      <div style={{ background: "#fff", padding: "16px 24px", borderBottom: "1px solid #e2e8f0", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
+      <div style={{ background: "rgba(15,23,42,.6)", backdropFilter: "blur(12px)", padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
         <div style={{ display: "flex", justifyContent: "flex-start" }}>
           <a
             href="/"
             style={{
               padding: "8px 14px",
-              border: "none",
+              border: "1px solid rgba(255,255,255,.12)",
               borderRadius: 8,
               fontSize: 13,
               fontWeight: 600,
               cursor: "pointer",
-              background: "#e2e8f0",
-              color: "#475569",
+              background: "rgba(255,255,255,.06)",
+              color: "#94a3b8",
               textDecoration: "none",
               display: "inline-flex",
               alignItems: "center",
@@ -483,21 +522,21 @@ export default function MemberPanel() {
           </a>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-          <Image src="/img/logo.webp" alt="SSK" width={36} height={36} />
-          <h1 style={{ fontSize: 20, color: "#0f172a", margin: 0 }}>Panel członka</h1>
+          <Image src="/img/ssk-logo-white-sm.webp" alt="SSK" width={36} height={36} />
+          <h1 style={{ fontSize: 20, color: "#fff", margin: 0 }}>Panel członka</h1>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
           {isAdmin && (
             <button
               onClick={() => router.push("/admin")}
-              style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", background: "#0ea5e9", color: "#fff", fontFamily: "inherit" }}
+              style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", background: "#dc2626", color: "#fff", fontFamily: "inherit" }}
             >
               Panel admina
             </button>
           )}
           <button
             onClick={handleLogout}
-            style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", background: "#e2e8f0", color: "#475569", fontFamily: "inherit" }}
+            style={{ padding: "8px 14px", border: "1px solid rgba(255,255,255,.12)", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", background: "rgba(255,255,255,.06)", color: "#94a3b8", fontFamily: "inherit" }}
           >
             Wyloguj
           </button>
@@ -506,7 +545,7 @@ export default function MemberPanel() {
 
       <div style={{ maxWidth: 560, margin: "48px auto", padding: "0 20px", flex: 1, width: "100%" }}>
         {/* Header */}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 4px 24px rgba(0,0,0,.08)", marginBottom: 24 }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 8px 32px rgba(0,0,0,.2)", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
             <span style={{ fontSize: 40 }}>{isExpired ? "⚠️" : "✅"}</span>
             <div>
@@ -804,6 +843,46 @@ export default function MemberPanel() {
                       </option>
                     ))}
                   </select>
+                ) : editingField.key === "university" ? (
+                  <>
+                    <select
+                      style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+                      value={UNIVERSITIES.includes(editingField.value) ? editingField.value : "Inna"}
+                      onChange={(e) => setEditingField({ ...editingField, value: e.target.value === "Inna" ? "" : e.target.value })}
+                    >
+                      <option value="">— Wybierz uczelnię —</option>
+                      {UNIVERSITIES.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                    {!UNIVERSITIES.slice(0, -1).includes(editingField.value) && (
+                      <input
+                        type="text"
+                        placeholder="Wpisz nazwę uczelni..."
+                        style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginTop: 8 }}
+                        value={editingField.value === "Inna" ? "" : editingField.value}
+                        onChange={(e) => setEditingField({ ...editingField, value: e.target.value })}
+                      />
+                    )}
+                  </>
+                ) : editingField.key === "field_of_study" ? (
+                  <>
+                    <select
+                      style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+                      value={FIELDS_OF_STUDY.includes(editingField.value) ? editingField.value : "Inny"}
+                      onChange={(e) => setEditingField({ ...editingField, value: e.target.value === "Inny" ? "" : e.target.value })}
+                    >
+                      <option value="">— Wybierz kierunek —</option>
+                      {FIELDS_OF_STUDY.map((f) => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                    {!FIELDS_OF_STUDY.slice(0, -1).includes(editingField.value) && (
+                      <input
+                        type="text"
+                        placeholder="Wpisz nazwę kierunku..."
+                        style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginTop: 8 }}
+                        value={editingField.value === "Inny" ? "" : editingField.value}
+                        onChange={(e) => setEditingField({ ...editingField, value: e.target.value })}
+                      />
+                    )}
+                  </>
                 ) : (
                   <input
                     type={editingField.key === "email" ? "email" : "text"}

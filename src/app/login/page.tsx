@@ -126,14 +126,15 @@ function LoginForm() {
 
     setSendingRecovery(mode);
     const redirectTo = `${window.location.origin}/reset-password`;
-    const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
-      trimmedEmail,
-      { redirectTo }
-    );
+    const res = await fetch("/api/auth/send-recovery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: trimmedEmail, mode, redirectTo }),
+    });
+    const payload = await res.json().catch(() => ({}));
 
-    if (recoveryError) {
-      console.error("resetPasswordForEmail failed:", recoveryError);
-      setError(formatRecoveryError(recoveryError.message || "Nieznany błąd"));
+    if (!res.ok) {
+      setError(formatRecoveryError(payload?.error || "Nieznany błąd"));
       setSendingRecovery(null);
       return;
     }
@@ -162,6 +163,19 @@ function LoginForm() {
     );
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "12px 16px",
+    border: "1px solid #e2e8f0",
+    borderRadius: 10,
+    fontSize: 15,
+    fontFamily: "inherit",
+    outline: "none",
+    transition: "border .2s, box-shadow .2s",
+    boxSizing: "border-box",
+    background: "#f8fafc",
+  };
+
   return (
     <div
       style={{
@@ -169,248 +183,261 @@ function LoginForm() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#f8fafc",
+        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
         padding: 20,
       }}
     >
       <div
         style={{
           background: "#fff",
-          borderRadius: 16,
-          padding: 40,
-          boxShadow: "0 4px 24px rgba(0,0,0,.08)",
-          maxWidth: 440,
+          borderRadius: 20,
+          overflow: "hidden",
+          boxShadow: "0 20px 60px rgba(0,0,0,.3)",
+          maxWidth: 420,
           width: "100%",
-          textAlign: "center",
         }}
       >
-        <Image
-          src="/img/logo.webp"
-          alt="SSK"
-          width={64}
-          height={64}
-          style={{ margin: "0 auto 16px" }}
-        />
+        <div
+          style={{
+            background: "linear-gradient(135deg, #0f172a, #1e293b)",
+            padding: "28px 32px",
+            textAlign: "center",
+            position: "relative",
+          }}
+        >
+          <div style={{ position: "absolute", inset: 0, opacity: 0.05, overflow: "hidden" }}>
+            <svg viewBox="0 0 600 60" preserveAspectRatio="none" style={{ width: "100%", height: "100%", position: "absolute", bottom: 0 }}>
+              <path d="M0,30 L100,30 L110,30 L120,10 L130,50 L140,5 L150,45 L160,30 L300,30 L310,30 L320,10 L330,50 L340,5 L350,45 L360,30 L500,30 L510,30 L520,10 L530,50 L540,5 L550,45 L560,30 L600,30" fill="none" stroke="white" strokeWidth="2" />
+            </svg>
+          </div>
+          <Image
+            src="/img/ssk-logo-white-md.webp"
+            alt="SSK"
+            width={52}
+            height={52}
+            style={{ margin: "0 auto 10px", position: "relative" }}
+          />
+          <h2
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontSize: 20,
+              color: "#fff",
+              margin: 0,
+              fontWeight: 700,
+              position: "relative",
+            }}
+          >
+            {showChoice ? `Witaj, ${userName}!` : "Panel SSK"}
+          </h2>
+          <p style={{ color: "#94a3b8", fontSize: 13, margin: "6px 0 0", position: "relative" }}>
+            {showChoice
+              ? "Wybierz panel, do którego chcesz przejść"
+              : "Zaloguj się do panelu członka lub administracji"}
+          </p>
+        </div>
 
-        {showChoice ? (
-          <>
-            <h2
-              style={{
-                fontFamily: "var(--font-serif)",
-                fontSize: 24,
-                marginBottom: 4,
-                color: "#0f172a",
-              }}
-            >
-              Witaj, {userName}!
-            </h2>
-            <p style={{ color: "#64748b", fontSize: 14, marginBottom: 28 }}>
-              Wybierz panel, do którego chcesz przejść
-            </p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <button
-                onClick={() => router.push("/admin")}
-                style={{
-                  width: "100%",
-                  padding: "16px 20px",
-                  background: "#dc2626",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 10,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 10,
-                }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                Panel Administracji
-              </button>
-              <button
-                onClick={() => router.push("/panel")}
-                style={{
-                  width: "100%",
-                  padding: "16px 20px",
-                  background: "#0f172a",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 10,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 10,
-                }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-                Panel Członka
-              </button>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              style={{
-                marginTop: 20,
-                background: "none",
-                border: "none",
-                color: "#64748b",
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              Wyloguj się
-            </button>
-          </>
-        ) : (
-          <>
-            <h2
-              style={{
-                fontFamily: "var(--font-serif)",
-                fontSize: 24,
-                marginBottom: 4,
-                color: "#0f172a",
-              }}
-            >
-              Panel SSK
-            </h2>
-            <p style={{ color: "#64748b", fontSize: 14, marginBottom: 24 }}>
-              Zaloguj się do panelu członka lub administracji
-            </p>
-
-            <form onSubmit={handleLogin}>
-              <div style={{ textAlign: "left", marginBottom: 16 }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontWeight: 600,
-                    marginBottom: 6,
-                    fontSize: 14,
-                    color: "#1e293b",
-                  }}
-                >
-                  Adres e-mail
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="jan.kowalski@gmail.com"
-                  required
+        <div style={{ padding: "28px 32px 32px" }}>
+          {showChoice ? (
+            <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <button
+                  onClick={() => router.push("/admin")}
                   style={{
                     width: "100%",
-                    padding: "12px 16px",
-                    border: "2px solid #e2e8f0",
+                    padding: "14px 20px",
+                    background: "#dc2626",
+                    color: "#fff",
+                    border: "none",
                     borderRadius: 10,
                     fontSize: 15,
-                    fontFamily: "inherit",
-                    outline: "none",
-                    transition: "border .2s",
-                    boxSizing: "border-box",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#dc2626")}
-                  onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
-                />
-              </div>
-              <div style={{ textAlign: "left", marginBottom: 16 }}>
-                <label
-                  style={{
-                    display: "block",
                     fontWeight: 600,
-                    marginBottom: 6,
-                    fontSize: 14,
-                    color: "#1e293b",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    transition: "opacity .15s",
                   }}
                 >
-                  Hasło
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  Panel Administracji
+                </button>
+                <button
+                  onClick={() => router.push("/panel")}
                   style={{
                     width: "100%",
-                    padding: "12px 16px",
-                    border: "2px solid #e2e8f0",
+                    padding: "14px 20px",
+                    background: "#0f172a",
+                    color: "#fff",
+                    border: "none",
                     borderRadius: 10,
                     fontSize: 15,
+                    fontWeight: 600,
+                    cursor: "pointer",
                     fontFamily: "inherit",
-                    outline: "none",
-                    transition: "border .2s",
-                    boxSizing: "border-box",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    transition: "opacity .15s",
                   }}
-                  onFocus={(e) => (e.target.style.borderColor = "#dc2626")}
-                  onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
-                />
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  Panel Członka
+                </button>
               </div>
 
-              {error && (
-                <p
+              <div style={{ textAlign: "center", marginTop: 18 }}>
+                <button
+                  onClick={handleLogout}
                   style={{
-                    color: "#dc2626",
-                    fontSize: 14,
+                    background: "none",
+                    border: "none",
+                    color: "#94a3b8",
+                    fontSize: 13,
                     fontWeight: 500,
-                    marginBottom: 12,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
                   }}
                 >
-                  {error}
-                </p>
-              )}
-              {notice && (
-                <p
-                  style={{
-                    color: "#166534",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    marginBottom: 12,
-                  }}
-                >
-                  {notice}
-                </p>
-              )}
+                  Wyloguj się
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <form onSubmit={handleLogin}>
+                <div style={{ marginBottom: 14 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontWeight: 600,
+                      marginBottom: 6,
+                      fontSize: 13,
+                      color: "#475569",
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    Adres e-mail
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jan.kowalski@gmail.com"
+                    required
+                    style={inputStyle}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "#dc2626";
+                      e.target.style.boxShadow = "0 0 0 3px rgba(220,38,38,.1)";
+                      e.target.style.background = "#fff";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "#e2e8f0";
+                      e.target.style.boxShadow = "none";
+                      e.target.style.background = "#f8fafc";
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: 18 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontWeight: 600,
+                      marginBottom: 6,
+                      fontSize: 13,
+                      color: "#475569",
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    Hasło
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    style={inputStyle}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "#dc2626";
+                      e.target.style.boxShadow = "0 0 0 3px rgba(220,38,38,.1)";
+                      e.target.style.background = "#fff";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "#e2e8f0";
+                      e.target.style.boxShadow = "none";
+                      e.target.style.background = "#f8fafc";
+                    }}
+                  />
+                </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  width: "100%",
-                  padding: 14,
-                  background: loading ? "#94a3b8" : "#dc2626",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 10,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  cursor: loading ? "not-allowed" : "pointer",
-                  fontFamily: "inherit",
-                  marginTop: 8,
-                }}
-              >
-                {loading ? "Logowanie..." : "Zaloguj się"}
-              </button>
+                {error && (
+                  <div
+                    style={{
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      marginBottom: 14,
+                    }}
+                  >
+                    <p style={{ color: "#dc2626", fontSize: 13, fontWeight: 500, margin: 0 }}>
+                      {error}
+                    </p>
+                  </div>
+                )}
+                {notice && (
+                  <div
+                    style={{
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      marginBottom: 14,
+                    }}
+                  >
+                    <p style={{ color: "#166534", fontSize: 13, fontWeight: 500, margin: 0 }}>
+                      {notice}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    width: "100%",
+                    padding: 14,
+                    background: loading ? "#94a3b8" : "#dc2626",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    cursor: loading ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                    transition: "background .15s",
+                  }}
+                >
+                  {loading ? "Logowanie..." : "Zaloguj się"}
+                </button>
+              </form>
 
               <div
                 style={{
-                  marginTop: 16,
+                  margin: "20px 0 0",
+                  padding: "16px 0 0",
+                  borderTop: "1px solid #f1f5f9",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 10,
+                  gap: 8,
                   alignItems: "center",
                 }}
               >
@@ -421,12 +448,13 @@ function LoginForm() {
                   style={{
                     background: "none",
                     border: "none",
-                    color: sendingRecovery === "generate" ? "#94a3b8" : "#dc2626",
-                    fontSize: 14,
-                    fontWeight: 600,
+                    color: sendingRecovery === "generate" ? "#cbd5e1" : "#64748b",
+                    fontSize: 13,
+                    fontWeight: 500,
                     cursor: sendingRecovery !== null ? "not-allowed" : "pointer",
                     fontFamily: "inherit",
                     padding: 0,
+                    transition: "color .15s",
                   }}
                 >
                   {sendingRecovery === "reset"
@@ -438,15 +466,16 @@ function LoginForm() {
                   onClick={() => requestRecoveryEmail("generate")}
                   disabled={sendingRecovery !== null}
                   style={{
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
-                    color: sendingRecovery === "reset" ? "#94a3b8" : "#334155",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    fontWeight: 600,
+                    background: "none",
+                    border: "none",
+                    color: sendingRecovery === "reset" ? "#cbd5e1" : "#94a3b8",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 500,
                     cursor: sendingRecovery !== null ? "not-allowed" : "pointer",
                     fontFamily: "inherit",
-                    padding: "8px 12px",
+                    padding: 0,
+                    transition: "color .15s",
                   }}
                 >
                   {sendingRecovery === "generate"
@@ -454,22 +483,23 @@ function LoginForm() {
                     : "Pierwsze logowanie? Wygeneruj hasło"}
                 </button>
               </div>
-            </form>
 
-            <a
-              href="/"
-              style={{
-                display: "inline-block",
-                marginTop: 20,
-                color: "#64748b",
-                fontSize: 14,
-                fontWeight: 500,
-              }}
-            >
-              ← Strona główna
-            </a>
-          </>
-        )}
+              <div style={{ textAlign: "center", marginTop: 14 }}>
+                <a
+                  href="/"
+                  style={{
+                    color: "#cbd5e1",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    textDecoration: "none",
+                  }}
+                >
+                  ← Strona główna
+                </a>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

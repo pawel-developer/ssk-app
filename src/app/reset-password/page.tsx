@@ -16,19 +16,50 @@ export default function ResetPasswordPage() {
   const [supabase] = useState(() => createClient());
 
   useEffect(() => {
-    const checkRecoverySession = async () => {
+    const init = async () => {
+      const hashParams = new URLSearchParams(
+        window.location.hash.substring(1)
+      );
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+
+      if (accessToken && refreshToken) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (!sessionError) {
+          window.history.replaceState({}, "", "/reset-password");
+          setHasRecoverySession(true);
+          setCheckingSession(false);
+          return;
+        }
+      }
+
+      const code = new URLSearchParams(window.location.search).get("code");
+      if (code) {
+        const { error: codeError } =
+          await supabase.auth.exchangeCodeForSession(code);
+        if (!codeError) {
+          window.history.replaceState({}, "", "/reset-password");
+          setHasRecoverySession(true);
+          setCheckingSession(false);
+          return;
+        }
+      }
+
       const { data } = await supabase.auth.getSession();
-      setCheckingSession(false);
-      if (!data.session) {
+      if (data.session) {
+        setHasRecoverySession(true);
+      } else {
         setError(
           "Link jest nieaktywny lub wygasł. Wróć do logowania i wyślij nowy link."
         );
-        return;
       }
-      setHasRecoverySession(true);
+      setCheckingSession(false);
     };
 
-    checkRecoverySession();
+    init();
   }, [supabase.auth]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,7 +114,7 @@ export default function ResetPasswordPage() {
         }}
       >
         <Image
-          src="/img/logo.webp"
+          src="/img/ssk-logo-md.webp"
           alt="SSK"
           width={64}
           height={64}
@@ -105,135 +136,159 @@ export default function ResetPasswordPage() {
 
         {checkingSession ? (
           <p style={{ color: "#64748b", fontSize: 14 }}>Weryfikacja linku...</p>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <div style={{ textAlign: "left", marginBottom: 16 }}>
-              <label
-                style={{
-                  display: "block",
-                  fontWeight: 600,
-                  marginBottom: 6,
-                  fontSize: 14,
-                  color: "#1e293b",
-                }}
-              >
-                Nowe hasło
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Min. 6 znaków"
-                required
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  border: "2px solid #e2e8f0",
-                  borderRadius: 10,
-                  fontSize: 15,
-                  fontFamily: "inherit",
-                  outline: "none",
-                  transition: "border .2s",
-                  boxSizing: "border-box",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "#dc2626")}
-                onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
-              />
-            </div>
-
-            <div style={{ textAlign: "left", marginBottom: 16 }}>
-              <label
-                style={{
-                  display: "block",
-                  fontWeight: 600,
-                  marginBottom: 6,
-                  fontSize: 14,
-                  color: "#1e293b",
-                }}
-              >
-                Powtórz hasło
-              </label>
-              <input
-                type="password"
-                value={passwordConfirm}
-                onChange={(e) => setPasswordConfirm(e.target.value)}
-                placeholder="Powtórz hasło"
-                required
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  border: "2px solid #e2e8f0",
-                  borderRadius: 10,
-                  fontSize: 15,
-                  fontFamily: "inherit",
-                  outline: "none",
-                  transition: "border .2s",
-                  boxSizing: "border-box",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "#dc2626")}
-                onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
-              />
-            </div>
-
-            {error && (
-              <p
-                style={{
-                  color: "#dc2626",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  marginBottom: 12,
-                }}
-              >
-                {error}
+        ) : success ? (
+          <>
+            <div style={{ margin: "8px 0 24px" }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" style={{ margin: "0 auto 12px", display: "block" }}>
+                <circle cx="12" cy="12" r="10" fill="#dcfce7" />
+                <path d="M8 12.5l2.5 2.5L16 9" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <p style={{ color: "#166534", fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
+                Hasło zostało ustawione!
               </p>
-            )}
-            {success && (
-              <p
-                style={{
-                  color: "#166534",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  marginBottom: 12,
-                }}
-              >
-                {success}
+              <p style={{ color: "#64748b", fontSize: 14 }}>
+                Możesz się teraz zalogować nowym hasłem.
               </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || !!success || !hasRecoverySession}
+            </div>
+            <Link
+              href="/login"
               style={{
+                display: "inline-block",
                 width: "100%",
                 padding: 14,
-                background: loading || success || !hasRecoverySession ? "#94a3b8" : "#dc2626",
+                background: "#dc2626",
                 color: "#fff",
                 border: "none",
                 borderRadius: 10,
                 fontSize: 15,
                 fontWeight: 600,
-                cursor: loading || success || !hasRecoverySession ? "not-allowed" : "pointer",
-                fontFamily: "inherit",
-                marginTop: 8,
+                textDecoration: "none",
+                textAlign: "center",
+                boxSizing: "border-box",
               }}
             >
-              {loading ? "Zapisywanie..." : "Ustaw hasło"}
-            </button>
-          </form>
-        )}
+              Przejdź do logowania
+            </Link>
+          </>
+        ) : (
+          <>
+            <form onSubmit={handleSubmit}>
+              <div style={{ textAlign: "left", marginBottom: 16 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontWeight: 600,
+                    marginBottom: 6,
+                    fontSize: 14,
+                    color: "#1e293b",
+                  }}
+                >
+                  Nowe hasło
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Min. 6 znaków"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    border: "2px solid #e2e8f0",
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontFamily: "inherit",
+                    outline: "none",
+                    transition: "border .2s",
+                    boxSizing: "border-box",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#dc2626")}
+                  onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+                />
+              </div>
 
-        <Link
-          href="/login"
-          style={{
-            display: "inline-block",
-            marginTop: 20,
-            color: "#64748b",
-            fontSize: 14,
-            fontWeight: 500,
-          }}
-        >
-          ← Wróć do logowania
-        </Link>
+              <div style={{ textAlign: "left", marginBottom: 16 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontWeight: 600,
+                    marginBottom: 6,
+                    fontSize: 14,
+                    color: "#1e293b",
+                  }}
+                >
+                  Powtórz hasło
+                </label>
+                <input
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
+                  placeholder="Powtórz hasło"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    border: "2px solid #e2e8f0",
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontFamily: "inherit",
+                    outline: "none",
+                    transition: "border .2s",
+                    boxSizing: "border-box",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#dc2626")}
+                  onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+                />
+              </div>
+
+              {error && (
+                <p
+                  style={{
+                    color: "#dc2626",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    marginBottom: 12,
+                  }}
+                >
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !hasRecoverySession}
+                style={{
+                  width: "100%",
+                  padding: 14,
+                  background: loading || !hasRecoverySession ? "#94a3b8" : "#dc2626",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  cursor: loading || !hasRecoverySession ? "not-allowed" : "pointer",
+                  fontFamily: "inherit",
+                  marginTop: 8,
+                }}
+              >
+                {loading ? "Zapisywanie..." : "Ustaw hasło"}
+              </button>
+            </form>
+
+            <Link
+              href="/login"
+              style={{
+                display: "inline-block",
+                marginTop: 20,
+                color: "#64748b",
+                fontSize: 14,
+                fontWeight: 500,
+              }}
+            >
+              ← Wróć do logowania
+            </Link>
+          </>
+        )}
       </div>
     </div>
   );

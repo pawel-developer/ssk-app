@@ -49,7 +49,7 @@ const DEFAULT_PAST: PastEvent[] = [
 ];
 
 const s = {
-  card: { background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 16 },
+  card: { background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 4px 24px rgba(0,0,0,.12)", marginBottom: 16 },
   title: { fontSize: 16, fontWeight: 700 as const, color: "#0f172a", marginBottom: 12 },
   label: { display: "block" as const, fontWeight: 600 as const, fontSize: 12, marginBottom: 3, color: "#475569" },
   input: { width: "100%", padding: "6px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const },
@@ -439,7 +439,7 @@ export default function EventsEditor() {
   return (
     <div style={{ padding: "0 24px 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-        <p style={{ color: "#64748b", fontSize: 14 }}>Zarządzaj wydarzeniami na stronie głównej</p>
+        <p style={{ color: "#94a3b8", fontSize: 14 }}>Zarządzaj wydarzeniami na stronie głównej</p>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {msg && <span style={{ fontSize: 13, color: msg.startsWith("B") ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{msg}</span>}
           <button onClick={save} disabled={saving} style={s.btn("#16a34a", "#fff")} data-tip="Zapisz">
