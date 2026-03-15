@@ -55,6 +55,45 @@ const LABELS: Record<string, string> = {
 
 const HIDDEN_KEYS = new Set(["birth_place", "statute_consent", "rodo_consent"]);
 
+const FIELDS_OF_STUDY = [
+  "Lekarski",
+  "Lekarsko-dentystyczny",
+  "Farmacja",
+  "Analityka medyczna",
+  "Pielęgniarstwo",
+  "Ratownictwo medyczne",
+  "Fizjoterapia",
+  "Zdrowie publiczne",
+  "Elektroradiologia",
+  "Inny",
+];
+
+const UNIVERSITIES = [
+  "Collegium Medicum Uniwersytetu Jagiellońskiego",
+  "Collegium Medicum Uniwersytetu Jana Kochanowskiego w Kielcach",
+  "Collegium Medicum Uniwersytetu Mikołaja Kopernika w Bydgoszczy",
+  "Collegium Medicum Uniwersytetu Zielonogórskiego",
+  "Gdański Uniwersytet Medyczny",
+  "Pomorski Uniwersytet Medyczny w Szczecinie",
+  "Uczelnia Łazarskiego",
+  "Uniwersytet Andrzeja Frycza Modrzewskiego w Krakowie",
+  "Uniwersytet Kaliski Collegium Medicum",
+  "Uniwersytet Kardynała Stefana Wyszyńskiego w Warszawie",
+  "Uniwersytet Medyczny im. Karola Marcinkowskiego w Poznaniu",
+  "Uniwersytet Medyczny im. Piastów Śląskich we Wrocławiu",
+  "Uniwersytet Medyczny w Białymstoku",
+  "Uniwersytet Medyczny w Lublinie",
+  "Uniwersytet Medyczny w Łodzi",
+  "Uniwersytet Opolski",
+  "Uniwersytet Radomski",
+  "Uniwersytet w Siedlcach",
+  "Warszawski Uniwersytet Medyczny",
+  "Akademia Śląska",
+  "Śląski Uniwersytet Medyczny (Katowice)",
+  "Śląski Uniwersytet Medyczny (Zabrze)",
+  "Inna",
+];
+
 function isDateLikeKey(key: string) {
   return key.endsWith("_date") || key === "created_at" || key === "updated_at" || key.endsWith("_until");
 }
@@ -84,7 +123,7 @@ function renderInfoRow(key: string, value: unknown) {
 function sectionCard(title: string, rows: Array<[string, unknown]>) {
   if (rows.length === 0) return null;
   return (
-    <div style={{ background: "#fff", borderRadius: 16, padding: 22, boxShadow: "0 2px 10px rgba(15,23,42,.05)" }}>
+    <div style={{ background: "#fff", borderRadius: 16, padding: 22, boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
       <h3 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: 16 }}>{title}</h3>
       <div>{rows.map(([key, value]) => renderInfoRow(key, value))}</div>
     </div>
@@ -247,8 +286,8 @@ export default function AdminMemberDetailsPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9" }}>
-        <p style={{ color: "#64748b" }}>Ładowanie profilu...</p>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }}>
+        <p style={{ color: "#94a3b8" }}>Ładowanie profilu...</p>
       </div>
     );
   }
@@ -343,19 +382,19 @@ export default function AdminMemberDetailsPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)" }}>
-      <div style={{ background: "#fff", padding: "16px 24px", borderBottom: "1px solid #e2e8f0", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }}>
+      <div style={{ background: "rgba(15,23,42,.6)", backdropFilter: "blur(12px)", padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
         <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          <button onClick={() => router.push("/admin")} style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "#e2e8f0", color: "#475569" }}>
+          <button onClick={() => router.push("/admin")} style={{ padding: "8px 14px", border: "1px solid rgba(255,255,255,.12)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "rgba(255,255,255,.06)", color: "#94a3b8" }}>
             ← Powrót do listy
           </button>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-          <Image src="/img/logo.webp" alt="SSK" width={36} height={36} />
-          <h1 style={{ fontSize: 20, color: "#0f172a", margin: 0 }}>Profil członka</h1>
+          <Image src="/img/ssk-logo-white-sm.webp" alt="SSK" width={36} height={36} />
+          <h1 style={{ fontSize: 20, color: "#fff", margin: 0 }}>Profil członka</h1>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={sendPaymentReminder} disabled={sendingReminder || activeFee} style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: sendingReminder || activeFee ? "not-allowed" : "pointer", background: sendingReminder || activeFee ? "#cbd5e1" : "#f59e0b", color: "#fff" }}>
+          <button onClick={sendPaymentReminder} disabled={sendingReminder || activeFee} style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: sendingReminder || activeFee ? "not-allowed" : "pointer", background: sendingReminder || activeFee ? "#475569" : "#f59e0b", color: "#fff" }}>
             {sendingReminder ? "Wysyłanie..." : activeFee ? "Składka aktywna" : "Przypomnij o składce"}
           </button>
           <button onClick={openEditModal} style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", background: "#2563eb", color: "#fff" }}>
@@ -371,7 +410,7 @@ export default function AdminMemberDetailsPage() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 2px 10px rgba(15,23,42,.05)" }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
                 <div style={{ width: 66, height: 66, borderRadius: "50%", background: "#dbeafe", color: "#1d4ed8", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 24 }}>
                   {initials}
@@ -391,7 +430,7 @@ export default function AdminMemberDetailsPage() {
               </div>
             </div>
 
-            <div style={{ background: "#fff", borderRadius: 16, padding: 12, boxShadow: "0 2px 10px rgba(15,23,42,.05)", display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 12, boxShadow: "0 4px 24px rgba(0,0,0,.12)", display: "flex", gap: 8, flexWrap: "wrap" }}>
               {sections.map((section) => (
                 <button
                   key={section.key}
@@ -432,7 +471,7 @@ export default function AdminMemberDetailsPage() {
             </div>
 
             {activeSection === "payments" ? (
-              <div style={{ background: "#fff", borderRadius: 16, padding: 22, boxShadow: "0 2px 10px rgba(15,23,42,.05)" }}>
+              <div style={{ background: "#fff", borderRadius: 16, padding: 22, boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
                 <h3 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: 16 }}>Dokumenty płatności</h3>
                 {paymentDocs.length === 0 ? (
                   <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 14 }}>Brak przesłanych dokumentów.</p>
@@ -517,8 +556,6 @@ export default function AdminMemberDetailsPage() {
                     { key: "last_name", label: "Nazwisko" },
                     { key: "email", label: "Email", disabled: true },
                     { key: "phone", label: "Telefon" },
-                    { key: "university", label: "Uczelnia" },
-                    { key: "field_of_study", label: "Kierunek" },
                   ] as const).map((f) => (
                     <div key={f.key} style={{ marginBottom: 12 }}>
                       <label style={{ display: "block", fontWeight: 600, fontSize: 14, marginBottom: 4, color: "#1e293b" }}>{f.label}</label>
@@ -530,6 +567,46 @@ export default function AdminMemberDetailsPage() {
                       />
                     </div>
                   ))}
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: "block", fontWeight: 600, fontSize: 14, marginBottom: 4, color: "#1e293b" }}>Kierunek</label>
+                    <select
+                      style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+                      value={FIELDS_OF_STUDY.includes(editing.field_of_study) ? editing.field_of_study : "Inny"}
+                      onChange={(e) => setEditing({ ...editing, field_of_study: e.target.value === "Inny" ? "" : e.target.value })}
+                    >
+                      <option value="">— Wybierz kierunek —</option>
+                      {FIELDS_OF_STUDY.map((f) => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                    {!FIELDS_OF_STUDY.slice(0, -1).includes(editing.field_of_study) && (
+                      <input
+                        type="text"
+                        placeholder="Wpisz nazwę kierunku..."
+                        style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginTop: 8 }}
+                        value={editing.field_of_study === "Inny" ? "" : editing.field_of_study}
+                        onChange={(e) => setEditing({ ...editing, field_of_study: e.target.value })}
+                      />
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: "block", fontWeight: 600, fontSize: 14, marginBottom: 4, color: "#1e293b" }}>Uczelnia</label>
+                    <select
+                      style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+                      value={UNIVERSITIES.includes(editing.university) ? editing.university : "Inna"}
+                      onChange={(e) => setEditing({ ...editing, university: e.target.value === "Inna" ? "" : e.target.value })}
+                    >
+                      <option value="">— Wybierz uczelnię —</option>
+                      {UNIVERSITIES.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                    {!UNIVERSITIES.slice(0, -1).includes(editing.university) && (
+                      <input
+                        type="text"
+                        placeholder="Wpisz nazwę uczelni..."
+                        style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginTop: 8 }}
+                        value={editing.university === "Inna" ? "" : editing.university}
+                        onChange={(e) => setEditing({ ...editing, university: e.target.value })}
+                      />
+                    )}
+                  </div>
                   <div style={{ marginBottom: 12 }}>
                     <label style={{ display: "block", fontWeight: 600, fontSize: 14, marginBottom: 4, color: "#1e293b" }}>
                       {editing.status === "absolwent" ? "Lata po studiach" : "Rok studiów"}

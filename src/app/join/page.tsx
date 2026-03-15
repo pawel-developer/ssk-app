@@ -5,21 +5,28 @@ import Image from "next/image";
 import Link from "next/link";
 
 const UNIVERSITIES = [
-  "Uniwersytet Medyczny w Białymstoku",
-  "Uniwersytet Medyczny im. Piastów Śląskich we Wrocławiu",
-  "Pomorski Uniwersytet Medyczny w Szczecinie",
-  "Gdański Uniwersytet Medyczny",
-  "Warszawski Uniwersytet Medyczny",
-  "Śląski Uniwersytet Medyczny (Katowice)",
-  "Śląski Uniwersytet Medyczny (Zabrze)",
-  "Uniwersytet Medyczny w Lublinie",
-  "Uniwersytet Medyczny w Łodzi",
   "Collegium Medicum Uniwersytetu Jagiellońskiego",
+  "Collegium Medicum Uniwersytetu Jana Kochanowskiego w Kielcach",
   "Collegium Medicum Uniwersytetu Mikołaja Kopernika w Bydgoszczy",
   "Collegium Medicum Uniwersytetu Zielonogórskiego",
-  "Uniwersytet Opolski",
-  "Akademia Śląska",
+  "Gdański Uniwersytet Medyczny",
+  "Pomorski Uniwersytet Medyczny w Szczecinie",
+  "Uczelnia Łazarskiego",
   "Uniwersytet Andrzeja Frycza Modrzewskiego w Krakowie",
+  "Uniwersytet Kaliski Collegium Medicum",
+  "Uniwersytet Kardynała Stefana Wyszyńskiego w Warszawie",
+  "Uniwersytet Medyczny im. Karola Marcinkowskiego w Poznaniu",
+  "Uniwersytet Medyczny im. Piastów Śląskich we Wrocławiu",
+  "Uniwersytet Medyczny w Białymstoku",
+  "Uniwersytet Medyczny w Lublinie",
+  "Uniwersytet Medyczny w Łodzi",
+  "Uniwersytet Opolski",
+  "Uniwersytet Radomski",
+  "Uniwersytet w Siedlcach",
+  "Warszawski Uniwersytet Medyczny",
+  "Akademia Śląska",
+  "Śląski Uniwersytet Medyczny (Katowice)",
+  "Śląski Uniwersytet Medyczny (Zabrze)",
   "Inna",
 ];
 
@@ -279,7 +286,7 @@ export default function JoinPage() {
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <Link href="/">
-            <Image src="/img/logo.webp" alt="SSK" width={56} height={56} style={{ margin: "0 auto 12px" }} />
+            <Image src="/img/ssk-logo-md.webp" alt="SSK" width={56} height={56} style={{ margin: "0 auto 12px" }} />
           </Link>
           <h1 style={{ fontFamily: "var(--font-serif)", fontSize: 28, color: "#0f172a", margin: "0 0 4px" }}>
             Dołącz do SSK

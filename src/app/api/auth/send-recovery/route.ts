@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase-admin";
-import { sendBrevoEmail } from "@/lib/mailer";
+import { sendBrevoEmail, wrapInBrandedLayout } from "@/lib/mailer";
 import { NextRequest, NextResponse } from "next/server";
 
 function safeOriginFromUrl(url: string) {
@@ -34,7 +34,9 @@ export async function POST(request: NextRequest) {
   const appOrigin = appUrl ? safeOriginFromUrl(appUrl) : null;
   const requestOrigin = request.headers.get("origin");
   const allowedOrigin = appOrigin || requestOrigin || null;
-  const fallbackRedirect = allowedOrigin ? `${allowedOrigin}/reset-password` : "";
+  const fallbackRedirect = allowedOrigin
+    ? `${allowedOrigin}/reset-password`
+    : "";
   const redirectTo = requestedRedirect || fallbackRedirect;
 
   if (!redirectTo) {
@@ -72,19 +74,19 @@ export async function POST(request: NextRequest) {
       : "Kliknij poniższy przycisk, aby zresetować hasło do konta SSK.";
 
   try {
+    const innerHtml = `
+      <p style="margin:0 0 16px;">${escapeHtml(intro)}</p>
+      <p style="color:#64748b;font-size:12px;margin:16px 0 0;">Jeśli przycisk nie działa, skopiuj ten link:</p>
+      <p style="word-break:break-all;font-size:11px;color:#94a3b8;margin:4px 0 0;"><a href="${escapeHtml(link)}" style="color:#0369a1;">${escapeHtml(link)}</a></p>
+    `;
+
     await sendBrevoEmail({
       to: [{ email }],
       subject,
-      htmlContent: `
-        <p>${escapeHtml(intro)}</p>
-        <p>
-          <a href="${escapeHtml(link)}" style="display:inline-block;padding:10px 14px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">
-            Otwórz link resetu hasła
-          </a>
-        </p>
-        <p>Jeśli przycisk nie działa, skopiuj ten link:</p>
-        <p><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>
-      `,
+      htmlContent: wrapInBrandedLayout(innerHtml, {
+        ctaLabel: "Otwórz link resetu hasła",
+        ctaUrl: link,
+      }),
     });
   } catch (mailError) {
     return NextResponse.json(

@@ -39,7 +39,7 @@ export const metadata: Metadata = {
       "200+ studentów z 15+ uczelni medycznych. Warsztaty ECHO i EKG, szkoły letnie, konferencje. Dołącz do społeczności przyszłych kardiologów!",
     url: "https://sskardio.pl/",
     locale: "pl_PL",
-    images: ["/img/logo.webp"],
+    images: ["/img/ssk-og-image.png"],
   },
   twitter: {
     card: "summary_large_image",
@@ -69,7 +69,7 @@ export default function RootLayout({
               name: "Studenckie Stowarzyszenie Kardiologiczne",
               alternateName: "SSK",
               url: "https://sskardio.pl",
-              logo: "/img/logo.webp",
+              logo: "/img/ssk-og-image.png",
               description:
                 "Studenckie Stowarzyszenie Kardiologiczne — łączymy studentów z pasją do kardiologii z 15+ uczelni medycznych w całej Polsce.",
               foundingDate: "2024-10-04",
