@@ -30,10 +30,13 @@ function LoginForm() {
 
   const formatRecoveryError = (message: string) => {
     const lower = message.toLowerCase();
+    if (lower.includes("brak") && (lower.includes("service_role") || lower.includes("brevo_api"))) {
+      return `Błąd konfiguracji serwera: ${message}`;
+    }
     if (lower.includes("redirect_to") || lower.includes("redirect") || lower.includes("not allowed")) {
       return "Link resetu jest zablokowany przez konfigurację Redirect URLs w Supabase. Dodaj bieżący adres /reset-password do allowlist.";
     }
-    if (lower.includes("smtp") || lower.includes("mail") || lower.includes("connect") || lower.includes("tls") || lower.includes("ssl")) {
+    if (lower.includes("smtp") || lower.includes("tls") || lower.includes("ssl")) {
       return "Supabase nie mógł wysłać e-maila przez SMTP. Sprawdź host/port/login/hasło SMTP (dla Brevo zwykle działa port 587 STARTTLS).";
     }
     return `Nie udało się wysłać wiadomości: ${message}`;

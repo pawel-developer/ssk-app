@@ -46,6 +46,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      { error: "Brak SUPABASE_SERVICE_ROLE_KEY w zmiennych środowiskowych serwera." },
+      { status: 500 }
+    );
+  }
+  if (!process.env.BREVO_API_KEY) {
+    return NextResponse.json(
+      { error: "Brak BREVO_API_KEY w zmiennych środowiskowych serwera." },
+      { status: 500 }
+    );
+  }
+
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.generateLink({
     type: "recovery",
