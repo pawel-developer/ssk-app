@@ -573,6 +573,27 @@ export default function MemberPanel() {
                 Rezygnacja/archiwizacja: {new Date(profile.archived_at).toLocaleDateString("pl-PL")}
               </div>
             )}
+            {!isArchived && isExpired && (
+              <button
+                type="button"
+                onClick={() => setActiveSection("payments")}
+                style={{
+                  marginTop: 10,
+                  padding: "8px 20px",
+                  background: "#dc2626",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "opacity .15s",
+                }}
+              >
+                Wyślij potwierdzenie
+              </button>
+            )}
           </div>
 
           {/* Member details with section navigation */}

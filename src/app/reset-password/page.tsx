@@ -77,9 +77,25 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
+
+    const { data: sessionCheck } = await supabase.auth.getSession();
+    if (!sessionCheck.session) {
+      setError("Sesja wygasła. Wróć do logowania i wyślij nowy link.");
+      setLoading(false);
+      return;
+    }
+
     const { error: updateError } = await supabase.auth.updateUser({ password });
     if (updateError) {
-      setError("Nie udało się ustawić hasła. Spróbuj ponownie z nowym linkiem.");
+      console.error("updateUser error:", updateError);
+      const msg = updateError.message?.toLowerCase() || "";
+      if (msg.includes("session") || msg.includes("token") || msg.includes("expired") || msg.includes("not authorized")) {
+        setError("Sesja wygasła lub link jest nieaktywny. Wróć do logowania i wyślij nowy link.");
+      } else if (msg.includes("same") || msg.includes("identical")) {
+        setError("Nowe hasło musi się różnić od obecnego.");
+      } else {
+        setError(`Nie udało się ustawić hasła: ${updateError.message}`);
+      }
       setLoading(false);
       return;
     }

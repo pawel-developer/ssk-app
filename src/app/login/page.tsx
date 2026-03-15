@@ -487,7 +487,18 @@ function LoginForm() {
                 </button>
               </div>
 
-              <div style={{ textAlign: "center", marginTop: 14 }}>
+              <div style={{ textAlign: "center", marginTop: 14, display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+                <a
+                  href="/join"
+                  style={{
+                    color: "#dc2626",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  Zapisz się
+                </a>
                 <a
                   href="/"
                   style={{
