@@ -7,7 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { changelog, type ChangelogEntry } from "@/data/changelog";
 
-const MEMBER_AREAS = new Set(["panel", "landing"] as const);
+const MEMBER_AREAS: Set<string> = new Set(["panel", "landing"]);
 
 function getMemberChangelog(): ChangelogEntry[] {
   return changelog
