@@ -7,6 +7,9 @@ import Image from "next/image";
 import BoardEditor from "@/components/admin/BoardEditor";
 import ContentEditor from "@/components/admin/ContentEditor";
 import EventsEditor from "@/components/admin/EventsEditor";
+import HelpGuide from "@/components/admin/HelpGuide";
+import EducationEditor from "@/components/admin/EducationEditor";
+import { changelog, AREA_LABELS } from "@/data/changelog";
 
 interface Profile {
   id: string;
@@ -41,7 +44,7 @@ interface PaymentConfirmation {
   profiles?: { first_name: string; last_name: string; email: string; fee_active: boolean; fee_valid_until: string | null; join_date: string | null; status: string | null };
 }
 
-type Tab = "members" | "past_members" | "pending" | "board" | "content" | "events";
+type Tab = "members" | "past_members" | "pending" | "board" | "content" | "events" | "education" | "changelog" | "help";
 
 function isMembershipActiveByDate(feeValidUntil: string | null) {
   if (!feeValidUntil) return false;
@@ -472,6 +475,9 @@ export default function AdminPanel() {
     { key: "board", label: "Zarząd" },
     { key: "content", label: "Treści strony" },
     { key: "events", label: "Wydarzenia" },
+    { key: "education", label: "Materiały edukacyjne" },
+    { key: "changelog", label: "Changelog" },
+    { key: "help", label: "Instrukcja" },
   ];
 
   return (
@@ -732,7 +738,51 @@ export default function AdminPanel() {
       {/* ==================== EVENTS TAB ==================== */}
       {tab === "events" && <EventsEditor />}
 
-      
+      {/* ==================== EDUCATION TAB ==================== */}
+      {tab === "education" && <EducationEditor />}
+
+      {/* ==================== CHANGELOG TAB ==================== */}
+      {tab === "changelog" && (
+        <div style={{ padding: "0 24px 24px" }}>
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ color: "#94a3b8", fontSize: 13 }}>
+              Changelog jest aktualizowany automatycznie przy każdej sesji w Cursor.
+            </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {changelog.map((entry, i) => (
+              <div key={i} style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 4px 24px rgba(0,0,0,.12)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", margin: 0 }}>{entry.titlePl}</h3>
+                  <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                    {new Date(entry.date).toLocaleDateString("pl-PL", { year: "numeric", month: "long", day: "numeric" })}
+                  </span>
+                </div>
+                {entry.sections.map((section, si) => (
+                  <div key={si} style={{ marginBottom: si < entry.sections.length - 1 ? 12 : 0 }}>
+                    <span style={{
+                      display: "inline-block", padding: "2px 8px", borderRadius: 99, fontSize: 11, fontWeight: 700, marginBottom: 6,
+                      background: section.area === "landing" ? "#fee2e2" : section.area === "panel" ? "#e0f2fe" : "#f3e8ff",
+                      color: section.area === "landing" ? "#dc2626" : section.area === "panel" ? "#0369a1" : "#7c3aed",
+                    }}>
+                      {AREA_LABELS[section.area].pl}
+                    </span>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {section.items.map((item, j) => (
+                        <li key={j} style={{ fontSize: 13, color: "#475569", padding: "3px 0", lineHeight: 1.5 }}>{item.pl}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== HELP TAB ==================== */}
+      {tab === "help" && <HelpGuide />}
+
       {/* ==================== FILE PREVIEW MODAL ==================== */}
       {(previewUrl || previewLoading) && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 200, display: "flex", justifyContent: "center", alignItems: "center", padding: 16 }} onClick={() => { setPreviewUrl(null); setPreviewFileName(""); }}>

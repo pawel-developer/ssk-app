@@ -195,6 +195,7 @@ export default function AdminMemberDetailsPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [editSection, setEditSection] = useState<"personal" | "membership">("personal");
   const [sendingReminder, setSendingReminder] = useState(false);
+  const [sendingRecovery, setSendingRecovery] = useState(false);
 
   const memberId = params?.id;
 
@@ -381,6 +382,25 @@ export default function AdminMemberDetailsPage() {
     alert("Przypomnienie zostało wysłane.");
   };
 
+  const sendRecoveryLink = async () => {
+    const memberEmail = String(member?.email || "").trim();
+    if (!memberEmail) return;
+    if (!confirm(`Wysłać link do resetu hasła na adres ${memberEmail}?`)) return;
+    setSendingRecovery(true);
+    const res = await fetch("/api/auth/send-recovery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: memberEmail, mode: "generate" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setSendingRecovery(false);
+    if (!res.ok) {
+      alert("Nie udało się wysłać linku: " + (data.error || "Nieznany błąd"));
+      return;
+    }
+    alert("Link do resetu hasła został wysłany na adres: " + memberEmail);
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }}>
       <div style={{ background: "rgba(15,23,42,.6)", backdropFilter: "blur(12px)", padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
@@ -396,6 +416,9 @@ export default function AdminMemberDetailsPage() {
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
           <button onClick={sendPaymentReminder} disabled={sendingReminder || activeFee} style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: sendingReminder || activeFee ? "not-allowed" : "pointer", background: sendingReminder || activeFee ? "#475569" : "#f59e0b", color: "#fff" }}>
             {sendingReminder ? "Wysyłanie..." : activeFee ? "Składka aktywna" : "Przypomnij o składce"}
+          </button>
+          <button onClick={sendRecoveryLink} disabled={sendingRecovery} style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: sendingRecovery ? "not-allowed" : "pointer", background: sendingRecovery ? "#475569" : "#7c3aed", color: "#fff" }}>
+            {sendingRecovery ? "Wysyłanie..." : "Wyślij link do resetu hasła"}
           </button>
           <button onClick={openEditModal} style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", background: "#2563eb", color: "#fff" }}>
             Edytuj profil

@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import Image from "next/image";
+import Link from "next/link";
+import { changelog } from "@/data/changelog";
 
 interface Profile {
   id: string;
@@ -40,6 +42,40 @@ interface PaymentConfirmation {
   uploaded_at: string;
   status: string;
   rejection_reason: string | null;
+}
+
+interface UpcomingEventData {
+  title?: string;
+  date_pl?: string;
+  event_date_start?: string;
+  event_time_start?: string;
+  event_place?: string;
+  event_mode?: string;
+  link?: string;
+  img?: string;
+}
+
+interface EduCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  is_published: boolean;
+}
+
+interface EduSubcategory {
+  id: string;
+  category_id: string;
+  name: string;
+  is_published: boolean;
+}
+
+interface EduMaterial {
+  id: string;
+  subcategory_id: string;
+  title: string;
+  thumbnail_url: string | null;
+  is_published: boolean;
 }
 
 type EditableFieldKey = "email" | "phone" | "university" | "field_of_study" | "status" | "year_of_study";
@@ -164,6 +200,8 @@ function normalizeYear(rawYear: string, status: "student" | "absolwent") {
   return match ? match[0] : "1";
 }
 
+type DashboardView = "dashboard" | "profile" | "payments";
+
 export default function MemberPanel() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [confirmations, setConfirmations] = useState<PaymentConfirmation[]>([]);
@@ -177,6 +215,11 @@ export default function MemberPanel() {
   const [activeSection, setActiveSection] = useState("personal");
   const [editingField, setEditingField] = useState<EditingField | null>(null);
   const [savingField, setSavingField] = useState(false);
+  const [view, setView] = useState<DashboardView>("dashboard");
+  const [upcomingEvent, setUpcomingEvent] = useState<UpcomingEventData | null>(null);
+  const [eduCategories, setEduCategories] = useState<EduCategory[]>([]);
+  const [eduSubcategories, setEduSubcategories] = useState<EduSubcategory[]>([]);
+  const [eduMaterials, setEduMaterials] = useState<EduMaterial[]>([]);
   const router = useRouter();
   const supabase = createClient();
 
@@ -214,6 +257,31 @@ export default function MemberPanel() {
         .order("uploaded_at", { ascending: false });
 
       if (confs) setConfirmations(confs);
+
+      // Load upcoming event from site_content
+      const { data: eventContent } = await supabase
+        .from("site_content")
+        .select("content")
+        .eq("id", "events_upcoming")
+        .maybeSingle();
+
+      if (eventContent?.content) {
+        setUpcomingEvent(eventContent.content as UpcomingEventData);
+      }
+
+      // Load education data
+      try {
+        const eduRes = await fetch("/api/education");
+        if (eduRes.ok) {
+          const eduData = await eduRes.json();
+          setEduCategories((eduData.categories || []).filter((c: EduCategory) => c.is_published));
+          setEduSubcategories((eduData.subcategories || []).filter((s: EduSubcategory) => s.is_published));
+          setEduMaterials((eduData.materials || []).filter((m: EduMaterial) => m.is_published));
+        }
+      } catch {
+        // Education data is non-critical
+      }
+
       setLoading(false);
     } catch (err: unknown) {
       setError("Nieoczekiwany błąd: " + (err instanceof Error ? err.message : String(err)));
@@ -248,10 +316,6 @@ export default function MemberPanel() {
       return;
     }
 
-    const { data: urlData } = supabase.storage
-      .from("payment-proofs")
-      .getPublicUrl(filePath);
-
     const { error: insertError } = await supabase
       .from("payment_confirmations")
       .insert({
@@ -275,16 +339,13 @@ export default function MemberPanel() {
     setCertificateLoading(true);
     setCertificateMsg(null);
     try {
-      const res = await fetch("/api/certificates/download", {
-        method: "POST",
-      });
+      const res = await fetch("/api/certificates/download", { method: "POST" });
       const data: { signedUrl?: string; error?: string } = await res.json();
       if (!res.ok || !data.signedUrl) {
         setCertificateMsg({ type: "err", text: data.error || "Nie udało się pobrać certyfikatu." });
         setCertificateLoading(false);
         return;
       }
-
       const a = document.createElement("a");
       a.href = data.signedUrl;
       a.target = "_blank";
@@ -447,6 +508,8 @@ export default function MemberPanel() {
   const isExpired = !isMembershipActiveByDate(profile.fee_valid_until);
   const hasPending = confirmations.some((c) => c.status === "pending");
   const isAdmin = Boolean(profile.is_admin);
+  const editableKeys = new Set(["email", "phone", "university", "field_of_study", "status", "year_of_study"]);
+
   const profileSections = (() => {
     const sections = [
       {
@@ -492,32 +555,19 @@ export default function MemberPanel() {
       }))
       .filter((section) => section.rows.length > 0);
   })();
+
   const currentSection = activeSection === "payments"
     ? null
     : (profileSections.find((section) => section.key === activeSection) || profileSections[0]);
-  const editableKeys = new Set(["email", "phone", "university", "field_of_study", "status", "year_of_study"]);
+
+  const totalMaterials = eduMaterials.length;
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)", display: "flex", flexDirection: "column" }}>
       {/* Nav */}
       <div style={{ background: "rgba(15,23,42,.6)", backdropFilter: "blur(12px)", padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
         <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          <a
-            href="/"
-            style={{
-              padding: "8px 14px",
-              border: "1px solid rgba(255,255,255,.12)",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              background: "rgba(255,255,255,.06)",
-              color: "#94a3b8",
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-            }}
-          >
+          <a href="/" style={{ padding: "8px 14px", border: "1px solid rgba(255,255,255,.12)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "rgba(255,255,255,.06)", color: "#94a3b8", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
             ← Strona główna
           </a>
         </div>
@@ -543,291 +593,516 @@ export default function MemberPanel() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 560, margin: "48px auto", padding: "0 20px", flex: 1, width: "100%" }}>
-        {/* Header */}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 8px 32px rgba(0,0,0,.2)", marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-            <span style={{ fontSize: 40 }}>{isExpired ? "⚠️" : "✅"}</span>
-            <div>
-              <h2 style={{ fontFamily: "var(--font-serif)", fontSize: 22, color: "#0f172a", margin: 0 }}>{name}</h2>
-              <p style={{ color: "#64748b", fontSize: 14, margin: 0 }}>{profile.university || "—"}</p>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 20px", flex: 1, width: "100%" }}>
+        {/* ====== DASHBOARD VIEW ====== */}
+        {view === "dashboard" && (
+          <>
+            {/* Welcome header */}
+            <div style={{ textAlign: "center", marginBottom: 36 }}>
+              <h2 style={{ fontFamily: "var(--font-serif)", fontSize: 28, color: "#fff", margin: "0 0 6px" }}>
+                Witaj w SSK, {profile.first_name}!
+              </h2>
+              <p style={{ color: "#94a3b8", fontSize: 15, margin: 0 }}>
+                Studenckie Stowarzyszenie Kardiologiczne
+              </p>
             </div>
-          </div>
 
-          {/* Membership banner */}
-          <div style={{
-            padding: 16, borderRadius: 10, marginBottom: 20, textAlign: "center",
-            background: isArchived ? "#e5e7eb" : isExpired ? "#fee2e2" : "#dcfce7",
-            border: `2px solid ${isArchived ? "#9ca3af" : isExpired ? "#fca5a5" : "#86efac"}`,
-          }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: isArchived ? "#374151" : isExpired ? "#dc2626" : "#16a34a" }}>
-              {isArchived ? "Były członek stowarzyszenia" : isExpired ? "Składka wygasła" : "Członkostwo aktywne"}
-            </div>
-            {!isArchived && profile.fee_valid_until && (
-              <div style={{ fontSize: 13, color: "#64748b" }}>
-                Ważne do: {new Date(profile.fee_valid_until).toLocaleDateString("pl-PL")}
-              </div>
-            )}
-            {isArchived && profile.archived_at && (
-              <div style={{ fontSize: 13, color: "#6b7280" }}>
-                Rezygnacja/archiwizacja: {new Date(profile.archived_at).toLocaleDateString("pl-PL")}
-              </div>
-            )}
-            {!isArchived && isExpired && (
-              <button
-                type="button"
-                onClick={() => setActiveSection("payments")}
-                style={{
-                  marginTop: 10,
-                  padding: "8px 20px",
-                  background: "#dc2626",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  transition: "opacity .15s",
-                }}
+            {/* Dashboard grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginBottom: 32 }}>
+
+              {/* ── Card 1: Membership Status ── */}
+              <div
+                style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,.2)", cursor: "pointer", transition: "transform .15s, box-shadow .15s" }}
+                onClick={() => setView("profile")}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 40px rgba(0,0,0,.3)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 8px 32px rgba(0,0,0,.2)"; }}
               >
-                Wyślij potwierdzenie
-              </button>
-            )}
-          </div>
-
-          {/* Member details with section navigation */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 12, boxShadow: "0 2px 10px rgba(15,23,42,.05)", display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-            {profileSections.map((section) => (
-              <button
-                key={section.key}
-                type="button"
-                onClick={() => setActiveSection(section.key)}
-                style={{
-                  border: "none",
-                  borderRadius: 10,
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  fontFamily: "inherit",
-                  background: currentSection?.key === section.key ? "#dbeafe" : "#f8fafc",
-                  color: currentSection?.key === section.key ? "#1d4ed8" : "#64748b",
-                }}
-              >
-                {section.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setActiveSection("payments")}
-              style={{
-                border: "none",
-                borderRadius: 10,
-                padding: "8px 12px",
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: 700,
-                fontFamily: "inherit",
-                background: activeSection === "payments" ? "#dbeafe" : "#f8fafc",
-                color: activeSection === "payments" ? "#1d4ed8" : "#64748b",
-              }}
-            >
-              Płatności
-            </button>
-          </div>
-
-          {activeSection === "payments" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
-              {!isArchived ? (
-                <div style={{ background: "#f8fafc", borderRadius: 12, padding: 20 }}>
-                  <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 18, color: "#0f172a", textAlign: "center", margin: "0 0 16px" }}>
-                    Prześlij potwierdzenie wpłaty
-                  </h3>
-
-                  <div style={{ background: "#fff", borderRadius: 10, padding: 16, textAlign: "center", marginBottom: 20 }}>
-                    <p style={{ fontSize: 14, color: "#475569", margin: "4px 0" }}>Numer konta:</p>
-                    <p style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "#0f172a", letterSpacing: 1 }}>
-                      43 1600 1462 1710 3081 5000 0001
-                    </p>
-                    <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 8 }}>
-                      Tytuł przelewu: „Składka członkowska Imię Nazwisko Uczelnia"
-                    </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+                  <span style={{ fontSize: 36 }}>{isArchived ? "📋" : isExpired ? "⚠️" : "✅"}</span>
+                  <div>
+                    <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 18, color: "#0f172a", margin: 0 }}>{name}</h3>
+                    <p style={{ color: "#64748b", fontSize: 13, margin: 0 }}>{profile.university || "—"}</p>
                   </div>
+                </div>
 
-                  {hasPending && (
-                    <div style={{ background: "#fef3c7", border: "2px solid #fde68a", borderRadius: 10, padding: 16, textAlign: "center", marginBottom: 16 }}>
-                      <p style={{ color: "#92400e", fontSize: 14, fontWeight: 600 }}>
-                        Masz potwierdzenie oczekujące na weryfikację
-                      </p>
+                <div style={{
+                  padding: 14, borderRadius: 10, textAlign: "center",
+                  background: isArchived ? "#e5e7eb" : isExpired ? "#fee2e2" : "#dcfce7",
+                  border: `2px solid ${isArchived ? "#9ca3af" : isExpired ? "#fca5a5" : "#86efac"}`,
+                }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: isArchived ? "#374151" : isExpired ? "#dc2626" : "#16a34a" }}>
+                    {isArchived ? "Były członek stowarzyszenia" : isExpired ? "Składka wygasła" : "Członkostwo aktywne"}
+                  </div>
+                  {!isArchived && profile.fee_valid_until && (
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                      Ważne do: {new Date(profile.fee_valid_until).toLocaleDateString("pl-PL")}
                     </div>
                   )}
+                </div>
 
-                  <form onSubmit={handleUpload}>
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{
-                        display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-                        border: "2px dashed #cbd5e1", borderRadius: 10, padding: 24, cursor: "pointer",
-                        transition: "border-color .2s", textAlign: "center", background: "#fff",
-                      }}>
-                        <span style={{ fontSize: 24 }}>📎</span>
-                        <span style={{ color: "#64748b", fontSize: 14 }}>
-                          {selectedFile ? `✅ ${selectedFile.name}` : "Kliknij lub przeciągnij plik (JPG, PNG, PDF, max 5 MB)"}
-                        </span>
-                        <input
-                          type="file"
-                          accept=".jpg,.jpeg,.png,.pdf"
-                          style={{ display: "none" }}
-                          onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                        />
-                      </label>
+                <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
+                  <div style={{ flex: 1, background: "#f8fafc", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Dołączenie</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                      {profile.join_date ? new Date(profile.join_date).toLocaleDateString("pl-PL") : "—"}
                     </div>
-
-                    {uploadMsg && (
-                      <p style={{ color: uploadMsg.type === "ok" ? "#16a34a" : "#dc2626", fontSize: 14, fontWeight: 500, marginBottom: 12, textAlign: "center" }}>
-                        {uploadMsg.text}
-                      </p>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={uploading || !selectedFile}
-                      style={{
-                        width: "100%", padding: 14,
-                        background: uploading || !selectedFile ? "#94a3b8" : "#dc2626",
-                        color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 600,
-                        cursor: uploading || !selectedFile ? "not-allowed" : "pointer", fontFamily: "inherit",
-                      }}
-                    >
-                      {uploading ? "Wysyłam..." : "Wyślij potwierdzenie"}
-                    </button>
-                  </form>
+                  </div>
+                  <div style={{ flex: 1, background: "#f8fafc", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Status</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                      {profile.status === "absolwent" ? "Absolwent/ka" : "Student/ka"}
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div style={{ background: "#f8fafc", borderRadius: 10, padding: 16 }}>
-                  <p style={{ margin: 0, color: "#64748b", fontSize: 14, textAlign: "center" }}>
-                    Konto jest zarchiwizowane. Wysyłanie nowych potwierdzeń jest niedostępne.
-                  </p>
-                </div>
-              )}
 
-              <div style={{ background: "#f8fafc", borderRadius: 12, padding: 20 }}>
-                <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 18, color: "#0f172a", textAlign: "center", margin: "0 0 16px" }}>
-                  Historia potwierdzeń
-                </h3>
-                {confirmations.length === 0 ? (
-                  <p style={{ color: "#64748b", fontSize: 14, textAlign: "center", margin: 0 }}>
-                    Brak przesłanych potwierdzeń.
-                  </p>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {confirmations.map((c) => (
-                      <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "#fff", borderRadius: 10 }}>
-                        <div>
-                          <p style={{ fontSize: 14, color: "#0f172a", fontWeight: 600, margin: 0 }}>{c.file_name || "Plik"}</p>
-                          <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
-                            {new Date(c.uploaded_at).toLocaleDateString("pl-PL")}
-                          </p>
-                          {c.rejection_reason && (
-                            <p style={{ fontSize: 12, color: "#b91c1c", margin: "4px 0 0" }}>
-                              Powód odrzucenia: {c.rejection_reason}
-                            </p>
-                          )}
-                        </div>
-                        <span style={{
-                          padding: "4px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600,
-                          background: c.status === "confirmed" ? "#dcfce7" : c.status === "rejected" ? "#fee2e2" : "#fef3c7",
-                          color: c.status === "confirmed" ? "#16a34a" : c.status === "rejected" ? "#dc2626" : "#d97706",
-                        }}>
-                          {c.status === "confirmed" ? "Zatwierdzone" : c.status === "rejected" ? "Odrzucone" : "Oczekuje"}
-                        </span>
+                <p style={{ textAlign: "center", fontSize: 12, color: "#94a3b8", margin: "12px 0 0" }}>
+                  Kliknij, aby zobaczyć pełny profil i płatności →
+                </p>
+              </div>
+
+              {/* ── Card 2: Upcoming Events ── */}
+              <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,.2)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <span style={{ fontSize: 24 }}>📅</span>
+                  <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 18, color: "#0f172a", margin: 0 }}>Nadchodzące wydarzenia</h3>
+                </div>
+
+                {upcomingEvent && upcomingEvent.title ? (
+                  <div>
+                    {upcomingEvent.img && (
+                      <div style={{ position: "relative", width: "100%", paddingBottom: "50%", borderRadius: 10, overflow: "hidden", marginBottom: 12 }}>
+                        <img
+                          src={upcomingEvent.img}
+                          alt={upcomingEvent.title}
+                          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                        />
                       </div>
-                    ))}
+                    )}
+                    <h4 style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", margin: "0 0 6px" }}>
+                      {upcomingEvent.title}
+                    </h4>
+                    <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 4px" }}>
+                      {upcomingEvent.date_pl || (() => {
+                        const parts = [];
+                        if (upcomingEvent.event_date_start) {
+                          parts.push(new Date(upcomingEvent.event_date_start).toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" }));
+                        }
+                        if (upcomingEvent.event_time_start) parts.push(upcomingEvent.event_time_start);
+                        if (upcomingEvent.event_place) parts.push(upcomingEvent.event_place);
+                        return parts.join(" · ") || "Data do ustalenia";
+                      })()}
+                    </p>
+                    {upcomingEvent.event_mode && (
+                      <span style={{
+                        display: "inline-block", padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, marginBottom: 8,
+                        background: upcomingEvent.event_mode === "online" ? "#dbeafe" : "#dcfce7",
+                        color: upcomingEvent.event_mode === "online" ? "#1d4ed8" : "#16a34a",
+                      }}>
+                        {upcomingEvent.event_mode === "online" ? "Online" : "Stacjonarnie"}
+                      </span>
+                    )}
+                    {upcomingEvent.link && (
+                      <div style={{ marginTop: 8 }}>
+                        <a
+                          href={upcomingEvent.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: "inline-block", padding: "10px 20px", background: "#0f172a", color: "#fff", borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+                        >
+                          Zobacz szczegóły →
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: "center", padding: "24px 0" }}>
+                    <p style={{ color: "#94a3b8", fontSize: 14 }}>Brak nadchodzących wydarzeń.</p>
+                    <p style={{ color: "#cbd5e1", fontSize: 12 }}>Śledź nas na social media, aby być na bieżąco!</p>
                   </div>
                 )}
               </div>
-            </div>
-          ) : (
-            currentSection && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 16 }}>
-              {currentSection.rows.map(([key, value]) => (
-                <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "#f8fafc", borderRadius: 10 }}>
-                  <span style={{ fontSize: 14, color: "#64748b" }}>{MEMBER_LABELS[String(key)] || String(key)}</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: "#0f172a", textAlign: "right", marginLeft: 12 }}>
-                      {formatMemberValue(String(key), value)}
-                    </span>
-                    {editableKeys.has(String(key)) && (
-                      <button
-                        type="button"
-                        onClick={() => openFieldEdit(String(key) as EditableFieldKey)}
-                        style={{
-                          border: "none",
-                          borderRadius: 8,
-                          padding: "6px 10px",
-                          cursor: "pointer",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          fontFamily: "inherit",
-                          background: "#dbeafe",
-                          color: "#1d4ed8",
-                        }}
-                      >
-                        Edytuj
-                      </button>
+
+              {/* ── Card 3: Education Materials ── */}
+              <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,.2)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 24 }}>🎓</span>
+                    <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 18, color: "#0f172a", margin: 0 }}>Materiały edukacyjne</h3>
+                  </div>
+                  {totalMaterials > 0 && (
+                    <Link
+                      href="/panel/education"
+                      style={{ fontSize: 13, fontWeight: 600, color: "#0369a1", textDecoration: "none" }}
+                    >
+                      Zobacz wszystkie →
+                    </Link>
+                  )}
+                </div>
+
+                {eduCategories.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "24px 0" }}>
+                    <p style={{ color: "#94a3b8", fontSize: 14 }}>Materiały edukacyjne pojawią się wkrótce.</p>
+                    <p style={{ color: "#cbd5e1", fontSize: 12 }}>Przygotowujemy filmy i przypadki kliniczne dla Ciebie!</p>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {eduCategories.slice(0, 4).map((cat) => {
+                      const catSubs = eduSubcategories.filter((s) => s.category_id === cat.id);
+                      const catMats = eduMaterials.filter((m) => catSubs.some((s) => s.id === m.subcategory_id));
+                      const firstThumb = catMats.find((m) => m.thumbnail_url)?.thumbnail_url;
+                      return (
+                        <Link
+                          key={cat.id}
+                          href={`/panel/education?category=${cat.slug}`}
+                          style={{ display: "flex", alignItems: "center", gap: 12, padding: 10, background: "#f8fafc", borderRadius: 10, textDecoration: "none", transition: "background .15s" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                        >
+                          {firstThumb ? (
+                            <img src={firstThumb} alt={cat.name} style={{ width: 56, height: 42, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
+                          ) : (
+                            <div style={{ width: 56, height: 42, background: "#e2e8f0", borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <span style={{ fontSize: 18 }}>📚</span>
+                            </div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{cat.name}</div>
+                            <div style={{ fontSize: 12, color: "#94a3b8" }}>{catMats.length} materiałów</div>
+                          </div>
+                          <span style={{ color: "#cbd5e1", fontSize: 18 }}>→</span>
+                        </Link>
+                      );
+                    })}
+                    {eduCategories.length > 4 && (
+                      <Link href="/panel/education" style={{ textAlign: "center", fontSize: 13, color: "#0369a1", textDecoration: "none", padding: 8 }}>
+                        + {eduCategories.length - 4} więcej kategorii
+                      </Link>
                     )}
                   </div>
+                )}
+              </div>
+
+              {/* ── Card 4: Changelog ── */}
+              <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,.2)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 24 }}>🆕</span>
+                    <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 18, color: "#0f172a", margin: 0 }}>Co nowego?</h3>
+                  </div>
+                  <Link
+                    href="/panel/changelog"
+                    style={{ fontSize: 13, fontWeight: 600, color: "#0369a1", textDecoration: "none" }}
+                  >
+                    Zobacz wszystko →
+                  </Link>
                 </div>
-              ))}
-            </div>
-            )
-          )}
 
-          {activeSection === "membership" && (
-            <div style={{ marginBottom: 16 }}>
-              <button
-                onClick={handleDownloadCertificate}
-                disabled={isExpired || isArchived || certificateLoading}
-                style={{
-                  width: "100%",
-                  padding: 14,
-                  background: isExpired || isArchived || certificateLoading ? "#94a3b8" : "#0369a1",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 10,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  cursor: isExpired || isArchived || certificateLoading ? "not-allowed" : "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                {certificateLoading ? "Przygotowuję certyfikat..." : "Pobierz certyfikat członkostwa"}
-              </button>
-              {certificateMsg && (
-                <p style={{ marginTop: 10, marginBottom: 0, fontSize: 13, textAlign: "center", color: certificateMsg.type === "ok" ? "#16a34a" : "#dc2626" }}>
-                  {certificateMsg.text}
-                </p>
-              )}
-              {(isExpired || isArchived) && (
-                <p style={{ marginTop: 8, marginBottom: 0, fontSize: 12, textAlign: "center", color: "#64748b" }}>
-                  Certyfikat jest dostępny wyłącznie dla aktywnych, obecnych członków.
-                </p>
-              )}
+                {(() => {
+                  const memberAreas = new Set(["panel", "landing"]);
+                  const recent = changelog
+                    .map((e) => ({ ...e, sections: e.sections.filter((s) => memberAreas.has(s.area)) }))
+                    .filter((e) => e.sections.length > 0)
+                    .slice(0, 3);
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {recent.map((entry, i) => (
+                        <Link
+                          key={i}
+                          href="/panel/changelog"
+                          style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 10, background: "#f8fafc", borderRadius: 10, textDecoration: "none", transition: "background .15s" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                        >
+                          <div style={{ width: 42, height: 42, background: "#e0f2fe", borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <span style={{ fontSize: 16 }}>📋</span>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{entry.titlePl}</div>
+                            <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                              {new Date(entry.date).toLocaleDateString("pl-PL", { year: "numeric", month: "long", day: "numeric" })}
+                            </div>
+                          </div>
+                          <span style={{ color: "#cbd5e1", fontSize: 18, alignSelf: "center" }}>→</span>
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
-          )}
+          </>
+        )}
 
-          {!isArchived && activeSection === "membership" && (
+        {/* ====== PROFILE VIEW ====== */}
+        {view === "profile" && (
+          <div style={{ maxWidth: 560, margin: "0 auto" }}>
             <button
-              onClick={handleResign}
-              disabled={resigning}
-              style={{ width: "100%", marginTop: 10, padding: 14, background: "#fff", color: "#b91c1c", border: "2px solid #fecaca", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: resigning ? "not-allowed" : "pointer", fontFamily: "inherit" }}
+              onClick={() => setView("dashboard")}
+              style={{ marginBottom: 20, padding: "8px 16px", border: "1px solid rgba(255,255,255,.12)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "rgba(255,255,255,.06)", color: "#94a3b8", fontFamily: "inherit" }}
             >
-              {resigning ? "Przetwarzanie..." : "Zrezygnuj ze stowarzyszenia"}
+              ← Wróć do panelu
             </button>
-          )}
-        </div>
+
+            <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 8px 32px rgba(0,0,0,.2)", marginBottom: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+                <span style={{ fontSize: 40 }}>{isExpired ? "⚠️" : "✅"}</span>
+                <div>
+                  <h2 style={{ fontFamily: "var(--font-serif)", fontSize: 22, color: "#0f172a", margin: 0 }}>{name}</h2>
+                  <p style={{ color: "#64748b", fontSize: 14, margin: 0 }}>{profile.university || "—"}</p>
+                </div>
+              </div>
+
+              {/* Membership banner */}
+              <div style={{
+                padding: 16, borderRadius: 10, marginBottom: 20, textAlign: "center",
+                background: isArchived ? "#e5e7eb" : isExpired ? "#fee2e2" : "#dcfce7",
+                border: `2px solid ${isArchived ? "#9ca3af" : isExpired ? "#fca5a5" : "#86efac"}`,
+              }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: isArchived ? "#374151" : isExpired ? "#dc2626" : "#16a34a" }}>
+                  {isArchived ? "Były członek stowarzyszenia" : isExpired ? "Składka wygasła" : "Członkostwo aktywne"}
+                </div>
+                {!isArchived && profile.fee_valid_until && (
+                  <div style={{ fontSize: 13, color: "#64748b" }}>
+                    Ważne do: {new Date(profile.fee_valid_until).toLocaleDateString("pl-PL")}
+                  </div>
+                )}
+                {isArchived && profile.archived_at && (
+                  <div style={{ fontSize: 13, color: "#6b7280" }}>
+                    Rezygnacja/archiwizacja: {new Date(profile.archived_at).toLocaleDateString("pl-PL")}
+                  </div>
+                )}
+                {!isArchived && isExpired && (
+                  <button
+                    type="button"
+                    onClick={() => { setView("payments"); setActiveSection("payments"); }}
+                    style={{ marginTop: 10, padding: "8px 20px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    Wyślij potwierdzenie
+                  </button>
+                )}
+              </div>
+
+              {/* Section tabs */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                {profileSections.map((section) => (
+                  <button
+                    key={section.key}
+                    type="button"
+                    onClick={() => setActiveSection(section.key)}
+                    style={{
+                      border: "none", borderRadius: 10, padding: "8px 12px", cursor: "pointer",
+                      fontSize: 13, fontWeight: 700, fontFamily: "inherit",
+                      background: currentSection?.key === section.key ? "#dbeafe" : "#f8fafc",
+                      color: currentSection?.key === section.key ? "#1d4ed8" : "#64748b",
+                    }}
+                  >
+                    {section.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => { setView("payments"); setActiveSection("payments"); }}
+                  style={{
+                    border: "none", borderRadius: 10, padding: "8px 12px", cursor: "pointer",
+                    fontSize: 13, fontWeight: 700, fontFamily: "inherit",
+                    background: "#f8fafc", color: "#64748b",
+                  }}
+                >
+                  Płatności
+                </button>
+              </div>
+
+              {/* Section rows */}
+              {currentSection && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 16 }}>
+                  {currentSection.rows.map(([key, value]) => (
+                    <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "#f8fafc", borderRadius: 10 }}>
+                      <span style={{ fontSize: 14, color: "#64748b" }}>{MEMBER_LABELS[String(key)] || String(key)}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 15, color: "#0f172a", textAlign: "right", marginLeft: 12 }}>
+                          {formatMemberValue(String(key), value)}
+                        </span>
+                        {editableKeys.has(String(key)) && (
+                          <button
+                            type="button"
+                            onClick={() => openFieldEdit(String(key) as EditableFieldKey)}
+                            style={{ border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit", background: "#dbeafe", color: "#1d4ed8" }}
+                          >
+                            Edytuj
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeSection === "membership" && (
+                <div style={{ marginBottom: 16 }}>
+                  <button
+                    onClick={handleDownloadCertificate}
+                    disabled={isExpired || isArchived || certificateLoading}
+                    style={{
+                      width: "100%", padding: 14,
+                      background: isExpired || isArchived || certificateLoading ? "#94a3b8" : "#0369a1",
+                      color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 600,
+                      cursor: isExpired || isArchived || certificateLoading ? "not-allowed" : "pointer", fontFamily: "inherit",
+                    }}
+                  >
+                    {certificateLoading ? "Przygotowuję certyfikat..." : "Pobierz certyfikat członkostwa"}
+                  </button>
+                  {certificateMsg && (
+                    <p style={{ marginTop: 10, marginBottom: 0, fontSize: 13, textAlign: "center", color: certificateMsg.type === "ok" ? "#16a34a" : "#dc2626" }}>
+                      {certificateMsg.text}
+                    </p>
+                  )}
+                  {(isExpired || isArchived) && (
+                    <p style={{ marginTop: 8, marginBottom: 0, fontSize: 12, textAlign: "center", color: "#64748b" }}>
+                      Certyfikat jest dostępny wyłącznie dla aktywnych, obecnych członków.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {!isArchived && activeSection === "membership" && (
+                <button
+                  onClick={handleResign}
+                  disabled={resigning}
+                  style={{ width: "100%", marginTop: 10, padding: 14, background: "#fff", color: "#b91c1c", border: "2px solid #fecaca", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: resigning ? "not-allowed" : "pointer", fontFamily: "inherit" }}
+                >
+                  {resigning ? "Przetwarzanie..." : "Zrezygnuj ze stowarzyszenia"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ====== PAYMENTS VIEW ====== */}
+        {view === "payments" && (
+          <div style={{ maxWidth: 560, margin: "0 auto" }}>
+            <button
+              onClick={() => { setView("profile"); setActiveSection("membership"); }}
+              style={{ marginBottom: 20, padding: "8px 16px", border: "1px solid rgba(255,255,255,.12)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "rgba(255,255,255,.06)", color: "#94a3b8", fontFamily: "inherit" }}
+            >
+              ← Wróć do profilu
+            </button>
+
+            <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 8px 32px rgba(0,0,0,.2)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {!isArchived ? (
+                  <div style={{ background: "#f8fafc", borderRadius: 12, padding: 20 }}>
+                    <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 18, color: "#0f172a", textAlign: "center", margin: "0 0 16px" }}>
+                      Prześlij potwierdzenie wpłaty
+                    </h3>
+
+                    <div style={{ background: "#fff", borderRadius: 10, padding: 16, textAlign: "center", marginBottom: 20 }}>
+                      <p style={{ fontSize: 14, color: "#475569", margin: "4px 0" }}>Numer konta:</p>
+                      <p style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "#0f172a", letterSpacing: 1 }}>
+                        43 1600 1462 1710 3081 5000 0001
+                      </p>
+                      <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 8 }}>
+                        Tytuł przelewu: „Składka członkowska Imię Nazwisko Uczelnia"
+                      </p>
+                    </div>
+
+                    {hasPending && (
+                      <div style={{ background: "#fef3c7", border: "2px solid #fde68a", borderRadius: 10, padding: 16, textAlign: "center", marginBottom: 16 }}>
+                        <p style={{ color: "#92400e", fontSize: 14, fontWeight: 600 }}>
+                          Masz potwierdzenie oczekujące na weryfikację
+                        </p>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleUpload}>
+                      <div style={{ marginBottom: 16 }}>
+                        <label style={{
+                          display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                          border: "2px dashed #cbd5e1", borderRadius: 10, padding: 24, cursor: "pointer",
+                          textAlign: "center", background: "#fff",
+                        }}>
+                          <span style={{ fontSize: 24 }}>📎</span>
+                          <span style={{ color: "#64748b", fontSize: 14 }}>
+                            {selectedFile ? `✅ ${selectedFile.name}` : "Kliknij lub przeciągnij plik (JPG, PNG, PDF, max 5 MB)"}
+                          </span>
+                          <input
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.pdf"
+                            style={{ display: "none" }}
+                            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      </div>
+
+                      {uploadMsg && (
+                        <p style={{ color: uploadMsg.type === "ok" ? "#16a34a" : "#dc2626", fontSize: 14, fontWeight: 500, marginBottom: 12, textAlign: "center" }}>
+                          {uploadMsg.text}
+                        </p>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={uploading || !selectedFile}
+                        style={{
+                          width: "100%", padding: 14,
+                          background: uploading || !selectedFile ? "#94a3b8" : "#dc2626",
+                          color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 600,
+                          cursor: uploading || !selectedFile ? "not-allowed" : "pointer", fontFamily: "inherit",
+                        }}
+                      >
+                        {uploading ? "Wysyłam..." : "Wyślij potwierdzenie"}
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <div style={{ background: "#f8fafc", borderRadius: 10, padding: 16 }}>
+                    <p style={{ margin: 0, color: "#64748b", fontSize: 14, textAlign: "center" }}>
+                      Konto jest zarchiwizowane. Wysyłanie nowych potwierdzeń jest niedostępne.
+                    </p>
+                  </div>
+                )}
+
+                <div style={{ background: "#f8fafc", borderRadius: 12, padding: 20 }}>
+                  <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 18, color: "#0f172a", textAlign: "center", margin: "0 0 16px" }}>
+                    Historia potwierdzeń
+                  </h3>
+                  {confirmations.length === 0 ? (
+                    <p style={{ color: "#64748b", fontSize: 14, textAlign: "center", margin: 0 }}>
+                      Brak przesłanych potwierdzeń.
+                    </p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {confirmations.map((c) => (
+                        <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "#fff", borderRadius: 10 }}>
+                          <div>
+                            <p style={{ fontSize: 14, color: "#0f172a", fontWeight: 600, margin: 0 }}>{c.file_name || "Plik"}</p>
+                            <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
+                              {new Date(c.uploaded_at).toLocaleDateString("pl-PL")}
+                            </p>
+                            {c.rejection_reason && (
+                              <p style={{ fontSize: 12, color: "#b91c1c", margin: "4px 0 0" }}>
+                                Powód odrzucenia: {c.rejection_reason}
+                              </p>
+                            )}
+                          </div>
+                          <span style={{
+                            padding: "4px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600,
+                            background: c.status === "confirmed" ? "#dcfce7" : c.status === "rejected" ? "#fee2e2" : "#fef3c7",
+                            color: c.status === "confirmed" ? "#16a34a" : c.status === "rejected" ? "#dc2626" : "#d97706",
+                          }}>
+                            {c.status === "confirmed" ? "Zatwierdzone" : c.status === "rejected" ? "Odrzucone" : "Oczekuje"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* ====== FIELD EDIT MODAL ====== */}
       {editingField && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 120, display: "flex", justifyContent: "center", alignItems: "center", padding: 16 }} onClick={() => setEditingField(null)}>
           <div style={{ background: "#fff", borderRadius: 16, maxWidth: 560, width: "100%", maxHeight: "85vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
