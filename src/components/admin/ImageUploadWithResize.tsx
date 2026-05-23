@@ -5,6 +5,7 @@ import Cropper, { type Area } from "react-easy-crop";
 
 export interface ImageUploadHandle {
   openCropper: () => void;
+  openFilePicker: () => void;
 }
 
 interface ImageUploadWithResizeProps {
@@ -97,7 +98,10 @@ const ImageUploadWithResize = forwardRef<ImageUploadHandle, ImageUploadWithResiz
 
     const openCropperWithCurrentImage = useCallback(() => {
       const src = resolveImgSrc(value);
-      if (!src) return;
+      if (!src) {
+        fileRef.current?.click();
+        return;
+      }
       setCropSrc(src);
       setIsExistingImage(true);
       setPendingFile(null);
@@ -105,7 +109,10 @@ const ImageUploadWithResize = forwardRef<ImageUploadHandle, ImageUploadWithResiz
       setZoom(1);
     }, [value]);
 
-    useImperativeHandle(ref, () => ({ openCropper: openCropperWithCurrentImage }), [openCropperWithCurrentImage]);
+    useImperativeHandle(ref, () => ({
+      openCropper: openCropperWithCurrentImage,
+      openFilePicker: () => fileRef.current?.click(),
+    }), [openCropperWithCurrentImage]);
 
     const onCropComplete = useCallback((_: Area, croppedAreaPixels: Area) => {
       setCroppedArea(croppedAreaPixels);
