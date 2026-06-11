@@ -266,7 +266,12 @@ export default function MemberPanel() {
         .maybeSingle();
 
       if (eventContent?.content) {
-        setUpcomingEvent(eventContent.content as UpcomingEventData);
+        const raw = eventContent.content;
+        if (Array.isArray(raw) && raw.length > 0) {
+          setUpcomingEvent(raw[0] as UpcomingEventData);
+        } else if (raw && typeof raw === "object") {
+          setUpcomingEvent(raw as UpcomingEventData);
+        }
       }
 
       // Load education data

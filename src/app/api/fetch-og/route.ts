@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import sharp from "sharp";
+import { createAdminClient } from "@/lib/supabase-admin";
 
 export async function POST(request: NextRequest) {
   const { url } = await request.json();
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest) {
     };
 
     const title = extract("og:title");
-    const image = extract("og:image");
+    const ogImage = extract("og:image");
     const description = extract("og:description");
 
     let date: string | null = null;
@@ -43,6 +45,46 @@ export async function POST(request: NextRequest) {
     if (dateMatch) {
       const d = new Date(parseInt(dateMatch[1]) * 1000);
       date = d.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
+
+    // Download OG image and re-upload to Supabase Storage so URLs don't expire
+    let image: string | null = ogImage;
+    if (ogImage) {
+      try {
+        const imgRes = await fetch(ogImage, {
+          headers: { "User-Agent": "facebookexternalhit/1.1" },
+        });
+        if (imgRes.ok) {
+          const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+          const webpBuffer = await sharp(imgBuffer)
+            .resize(800, 450, { fit: "cover", withoutEnlargement: true })
+            .webp({ quality: 85 })
+            .toBuffer();
+
+          const eventIdMatch = url.match(/events\/(\d+)/);
+          const safeName = eventIdMatch
+            ? `event-${eventIdMatch[1]}`
+            : `event-${Date.now()}`;
+          const outputName = `${safeName}.webp`;
+
+          const supabase = createAdminClient();
+          const { error: uploadError } = await supabase.storage
+            .from("event-images")
+            .upload(outputName, webpBuffer, {
+              contentType: "image/webp",
+              upsert: true,
+            });
+
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage
+              .from("event-images")
+              .getPublicUrl(outputName);
+            image = urlData.publicUrl;
+          }
+        }
+      } catch {
+        // Fall back to raw OG image URL if re-upload fails
+      }
     }
 
     return NextResponse.json({ title, image, description, date });

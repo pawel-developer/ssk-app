@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
         hostname: "lookaside.fbsbx.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "**.fbcdn.net",
+        pathname: "/**",
+      },
     ],
   },
 };
