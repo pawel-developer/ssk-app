@@ -732,6 +732,12 @@ export default function EventsEditor() {
                   {ev.title || `Wydarzenie ${idx + 1}`}
                 </div>
                 <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => imgRefs.current[`up-${idx}`]?.openFilePicker()}
+                    style={{ ...s.btn("#7c3aed", "#fff"), padding: "3px 8px", fontSize: 10 }}
+                  >
+                    {ev.img ? "Zmień zdjęcie" : "Dodaj zdjęcie"}
+                  </button>
                   <button onClick={() => moveUpcomingToPast(idx)} style={{ ...s.btn("#f59e0b", "#fff"), padding: "3px 8px", fontSize: 10 }}>
                     → Poprzednie
                   </button>
@@ -1105,6 +1111,12 @@ export default function EventsEditor() {
                 </div>
                 <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{ev.date}{ev.metaPl ? ` · ${ev.metaPl}` : ""}</div>
                 <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => imgRefs.current[`past-${i}`]?.openFilePicker()}
+                    style={{ ...s.btn("#7c3aed", "#fff"), padding: "3px 8px", fontSize: 10 }}
+                  >
+                    {ev.img ? "Zmień zdjęcie" : "Dodaj zdjęcie"}
+                  </button>
                   <button onClick={() => movePastToUpcoming(i)} style={{ ...s.btn("#16a34a", "#fff"), padding: "3px 8px", fontSize: 10 }}>← Nadchodzące</button>
                   {i > 0 && <button onClick={() => { const a = [...past]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; setPast(a); }} style={{ ...s.btn("#e2e8f0", "#475569"), padding: "3px 8px", fontSize: 10 }}>↑</button>}
                   {i < past.length - 1 && <button onClick={() => { const a = [...past]; [a[i], a[i + 1]] = [a[i + 1], a[i]]; setPast(a); }} style={{ ...s.btn("#e2e8f0", "#475569"), padding: "3px 8px", fontSize: 10 }}>↓</button>}
