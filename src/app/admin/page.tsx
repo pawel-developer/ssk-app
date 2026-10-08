@@ -9,6 +9,7 @@ import ContentEditor from "@/components/admin/ContentEditor";
 import EventsEditor from "@/components/admin/EventsEditor";
 import HelpGuide from "@/components/admin/HelpGuide";
 import EducationEditor from "@/components/admin/EducationEditor";
+import AccessManager from "@/components/admin/AccessManager";
 import { changelog, AREA_LABELS } from "@/data/changelog";
 
 interface Profile {
@@ -44,7 +45,7 @@ interface PaymentConfirmation {
   profiles?: { first_name: string; last_name: string; email: string; fee_active: boolean; fee_valid_until: string | null; join_date: string | null; status: string | null };
 }
 
-type Tab = "members" | "past_members" | "pending" | "board" | "content" | "events" | "education" | "changelog" | "help";
+type Tab = "members" | "past_members" | "pending" | "board" | "content" | "events" | "education" | "access" | "changelog" | "help";
 
 function isMembershipActiveByDate(feeValidUntil: string | null) {
   if (!feeValidUntil) return false;
@@ -64,6 +65,7 @@ export default function AdminPanel() {
   const [filter, setFilter] = useState<"all" | "active" | "expired">("all");
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
   
@@ -119,6 +121,7 @@ export default function AdminPanel() {
 
       if (!profile.is_admin) { router.push("/panel"); return; }
       setIsAdmin(true);
+      setCurrentUserId(user.id);
 
       const { data: membersData } = await supabase
         .from("profiles")
@@ -476,6 +479,7 @@ export default function AdminPanel() {
     { key: "content", label: "Treści strony" },
     { key: "events", label: "Wydarzenia" },
     { key: "education", label: "Materiały edukacyjne" },
+    { key: "access", label: `Dostęp (${members.filter((m) => m.is_admin).length})` },
     { key: "changelog", label: "Changelog" },
     { key: "help", label: "Instrukcja" },
   ];
@@ -632,6 +636,9 @@ export default function AdminPanel() {
                         >
                           {[m.first_name, m.last_name].filter(Boolean).join(" ") || "—"}
                         </button>
+                        {m.is_admin && (
+                          <span style={{ ...st.badge("#0f766e", "#ccfbf1"), marginLeft: 8, fontSize: 11, padding: "2px 8px" }}>Admin</span>
+                        )}
                       </td>
                       <td style={st.td}>{m.email}</td>
                       <td style={st.td}>{m.university || "—"}</td>
@@ -740,6 +747,17 @@ export default function AdminPanel() {
 
       {/* ==================== EDUCATION TAB ==================== */}
       {tab === "education" && <EducationEditor />}
+
+      {tab === "access" && (
+        <AccessManager
+          members={members}
+          currentUserId={currentUserId}
+          onAdminChange={(memberId, nextIsAdmin) =>
+            setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, is_admin: nextIsAdmin } : m)))
+          }
+          onOpenProfile={openMemberProfile}
+        />
+      )}
 
       {/* ==================== CHANGELOG TAB ==================== */}
       {tab === "changelog" && (

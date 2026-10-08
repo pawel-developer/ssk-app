@@ -196,6 +196,8 @@ export default function AdminMemberDetailsPage() {
   const [editSection, setEditSection] = useState<"personal" | "membership">("personal");
   const [sendingReminder, setSendingReminder] = useState(false);
   const [sendingRecovery, setSendingRecovery] = useState(false);
+  const [togglingAdmin, setTogglingAdmin] = useState(false);
+  const [viewerId, setViewerId] = useState<string | null>(null);
 
   const memberId = params?.id;
 
@@ -218,6 +220,7 @@ export default function AdminMemberDetailsPage() {
         router.push("/panel");
         return;
       }
+      setViewerId(user.id);
 
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
@@ -401,6 +404,30 @@ export default function AdminMemberDetailsPage() {
     alert("Link do resetu hasła został wysłany na adres: " + memberEmail);
   };
 
+  const memberIsAdmin = Boolean(member?.is_admin);
+  const isSelf = Boolean(viewerId && viewerId === memberId);
+  const toggleAdmin = async () => {
+    if (!memberId) return;
+    const nextValue = !memberIsAdmin;
+    const question = nextValue
+      ? `Nadać uprawnienia admina użytkownikowi ${fullName}? Uzyska pełny dostęp do panelu administratora.`
+      : `Odebrać uprawnienia admina użytkownikowi ${fullName}?`;
+    if (!confirm(question)) return;
+    setTogglingAdmin(true);
+    const res = await fetch("/api/members/admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member_id: memberId, is_admin: nextValue }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setTogglingAdmin(false);
+    if (!res.ok) {
+      alert("Nie udało się zmienić uprawnień: " + (data.error || "Nieznany błąd"));
+      return;
+    }
+    setMember((prev) => (prev ? { ...prev, is_admin: nextValue } : prev));
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }}>
       <div style={{ background: "rgba(15,23,42,.6)", backdropFilter: "blur(12px)", padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
@@ -423,6 +450,16 @@ export default function AdminMemberDetailsPage() {
           <button onClick={openEditModal} style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", background: "#2563eb", color: "#fff" }}>
             Edytuj profil
           </button>
+          {member && (
+            <button
+              onClick={toggleAdmin}
+              disabled={togglingAdmin || (isSelf && memberIsAdmin)}
+              title={isSelf && memberIsAdmin ? "Nie możesz odebrać uprawnień samemu sobie" : undefined}
+              style={{ padding: "8px 14px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: togglingAdmin || (isSelf && memberIsAdmin) ? "not-allowed" : "pointer", background: togglingAdmin || (isSelf && memberIsAdmin) ? "#475569" : memberIsAdmin ? "#dc2626" : "#0f766e", color: "#fff" }}
+            >
+              {togglingAdmin ? "Zapisywanie..." : memberIsAdmin ? "Odbierz uprawnienia admina" : "Nadaj uprawnienia admina"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -449,6 +486,11 @@ export default function AdminMemberDetailsPage() {
                   <span style={{ background: "#e0f2fe", color: "#0369a1", borderRadius: 999, padding: "6px 10px", fontSize: 12, fontWeight: 700 }}>
                     {String(member?.status || "Status nieustawiony")}
                   </span>
+                  {memberIsAdmin && (
+                    <span style={{ background: "#ccfbf1", color: "#0f766e", borderRadius: 999, padding: "6px 10px", fontSize: 12, fontWeight: 700 }}>
+                      Admin
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
