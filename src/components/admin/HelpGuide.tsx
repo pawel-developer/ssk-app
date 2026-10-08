@@ -298,32 +298,105 @@ export default function HelpGuide() {
         </p>
       </Section>
 
-      <Section title="Cursor &mdash; edycja kodu">
+      <Section title="Edycja kodu z AI &mdash; Claude Code, Cursor lub Codex">
         <p style={s.p}>
-          <a href="https://cursor.com" target="_blank" rel="noopener noreferrer" style={{ color: "#0369a1" }}>Cursor</a> to edytor kodu z wbudowanym AI, oparty na VS Code. Strona SSK jest rozwijana w Cursorze.
+          Kod strony możesz zmieniać, pisząc do AI po polsku, co ma zrobić. Do wyboru masz trzy narzędzia &mdash; wszystkie działają na tym samym repozytorium, więc wybierz jedno, które Ci najbardziej odpowiada.
         </p>
-        <h3 style={s.h3}>Czego potrzebujesz</h3>
+        <div style={{ background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13, color: "#0f766e", lineHeight: 1.6 }}>
+          <strong>Rekomendacja:</strong> zacznij od <strong>Claude Code</strong> &mdash; na dziś najprostszy w użyciu. Instalujesz jedną komendą, otwierasz w folderze projektu i po prostu piszesz, co chcesz zmienić.
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>&mdash; PS, stan na 8.10.2026</div>
+        </div>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Narzędzie</th>
+              <th style={s.th}>Co to jest</th>
+              <th style={s.th}>Konto / koszt</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={s.td}><a href="https://claude.com/product/claude-code" target="_blank" rel="noopener noreferrer" style={{ color: "#0369a1" }}><strong>Claude Code</strong></a> <span style={s.badge("#ccfbf1", "#0f766e")}>polecane</span></td>
+              <td style={s.td}>Asystent AI od Anthropic, działa w terminalu (jest też aplikacja i wtyczka do VS Code)</td>
+              <td style={s.td}>Konto Claude z planem Pro lub Max</td>
+            </tr>
+            <tr>
+              <td style={s.td}><a href="https://cursor.com" target="_blank" rel="noopener noreferrer" style={{ color: "#0369a1" }}><strong>Cursor</strong></a></td>
+              <td style={s.td}>Pełny edytor kodu (oparty na VS Code) z wbudowanym AI</td>
+              <td style={s.td}>Darmowy; plan Pro daje więcej zapytań AI</td>
+            </tr>
+            <tr>
+              <td style={s.td}><a href="https://openai.com/codex" target="_blank" rel="noopener noreferrer" style={{ color: "#0369a1" }}><strong>Codex</strong></a></td>
+              <td style={s.td}>Asystent AI od OpenAI, działa w terminalu (jest też aplikacja i wtyczka do VS Code)</td>
+              <td style={s.td}>Konto ChatGPT z płatnym planem (Plus lub wyższy)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 style={s.h3}>Czego potrzebujesz (niezależnie od narzędzia)</h3>
         <ul style={s.ul}>
-          <li><a href="https://cursor.com" target="_blank" rel="noopener noreferrer" style={{ color: "#0369a1" }}>Cursor</a> &mdash; darmowy (Pro daje więcej zapytań AI)</li>
           <li><a href="https://nodejs.org" target="_blank" rel="noopener noreferrer" style={{ color: "#0369a1" }}>Node.js</a> (v18+) &mdash; do uruchamiania projektu lokalnie</li>
           <li>Dostęp do <strong>repozytorium GitHub</strong> &mdash; właściciel musi dodać jako collaboratora</li>
           <li>Plik <span style={s.code}>.env.local</span> &mdash; skopiuj od właściciela projektu</li>
         </ul>
-        <h3 style={s.h3}>Pierwsze uruchomienie</h3>
+
+        <h3 style={s.h3}>Pierwsze uruchomienie projektu (wspólne)</h3>
         <ol style={s.ol}>
-          <li>Zainstaluj Cursor i Node.js</li>
+          <li>Zainstaluj Node.js</li>
           <li>
-            Sklonuj repozytorium:
-            <div style={s.sql}>git clone https://github.com/pawel-developer/ssk-app.git</div>
+            Otwórz terminal (na Macu: aplikacja <em>Terminal</em>) i sklonuj repozytorium:
+            <div style={s.sql}>git clone https://github.com/pawel-developer/ssk-app.git<br />cd ssk-app</div>
           </li>
-          <li>Otwórz folder <span style={s.code}>ssk-app</span> w Cursorze</li>
-          <li>Utwórz plik <span style={s.code}>.env.local</span> z odpowiednimi zmiennymi (dostaniesz od właściciela)</li>
+          <li>Utwórz w folderze <span style={s.code}>ssk-app</span> plik <span style={s.code}>.env.local</span> z odpowiednimi zmiennymi (dostaniesz od właściciela)</li>
           <li>
-            W terminalu Cursora:
+            Zainstaluj zależności i uruchom stronę lokalnie:
             <div style={s.sql}>npm install<br />npm run dev</div>
           </li>
           <li>Otwórz <span style={s.code}>http://localhost:3000</span></li>
         </ol>
+
+        <h3 style={s.h3}>Opcja A: Claude Code (polecane)</h3>
+        <ol style={s.ol}>
+          <li>
+            Zainstaluj Claude Code w terminalu:
+            <div style={s.sql}>curl -fsSL https://claude.ai/install.sh | bash</div>
+          </li>
+          <li>
+            Wejdź do folderu projektu i uruchom:
+            <div style={s.sql}>cd ssk-app<br />claude</div>
+          </li>
+          <li>Przy pierwszym uruchomieniu zaloguj się kontem Claude (otworzy się przeglądarka)</li>
+          <li>Napisz, co chcesz zmienić, np. <em>&quot;Zmień kolor nagłówka na czerwony&quot;</em>. Claude pokaże zmiany i zapyta o zgodę przed ich zapisaniem.</li>
+        </ol>
+
+        <h3 style={s.h3}>Opcja B: Cursor</h3>
+        <ol style={s.ol}>
+          <li>Pobierz i zainstaluj Cursor z <a href="https://cursor.com" target="_blank" rel="noopener noreferrer" style={{ color: "#0369a1" }}>cursor.com</a></li>
+          <li>Otwórz folder <span style={s.code}>ssk-app</span> w Cursorze (File &rarr; Open Folder)</li>
+          <li>Komendy z sekcji &quot;Pierwsze uruchomienie&quot; możesz wpisywać we wbudowanym terminalu Cursora</li>
+        </ol>
+        <ul style={s.ul}>
+          <li><strong>Cmd+K</strong> &mdash; edytuj zaznaczony kod za pomocą AI</li>
+          <li><strong>Cmd+L</strong> &mdash; chat AI z kontekstem pliku</li>
+          <li><strong>Cmd+I</strong> &mdash; tryb agenta &mdash; AI tworzy/edytuje pliki i uruchamia komendy</li>
+        </ul>
+
+        <h3 style={s.h3}>Opcja C: Codex</h3>
+        <ol style={s.ol}>
+          <li>
+            Zainstaluj Codex w terminalu:
+            <div style={s.sql}>npm install -g @openai/codex</div>
+          </li>
+          <li>
+            Wejdź do folderu projektu i uruchom:
+            <div style={s.sql}>cd ssk-app<br />codex</div>
+          </li>
+          <li>Przy pierwszym uruchomieniu wybierz logowanie kontem ChatGPT</li>
+          <li>Napisz, co chcesz zmienić &mdash; Codex przed zmianą plików lub uruchomieniem komend poprosi o zgodę</li>
+        </ol>
+        <p style={{ ...s.p, fontSize: 12, color: "#64748b" }}>
+          We wszystkich trzech narzędziach możesz pisać po polsku i poprosić AI także o zapisanie i opublikowanie zmian, np. <em>&quot;zrób commit i push&quot;</em> (patrz sekcja GitHub poniżej).
+        </p>
         <h3 style={s.h3}>Struktura plików</h3>
         <div style={{ ...s.sql, lineHeight: 1.6 }}>
           src/app/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← strony (page.tsx = strona główna, admin/, panel/, api/)<br />
@@ -333,13 +406,6 @@ export default function HelpGuide() {
           public/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← statyczne pliki (zdjęcia, fonty)<br />
           supabase/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← migracje SQL bazy danych
         </div>
-        <h3 style={s.h3}>AI w Cursorze</h3>
-        <ul style={s.ul}>
-          <li><strong>Cmd+K</strong> &mdash; edytuj zaznaczony kod za pomocą AI</li>
-          <li><strong>Cmd+L</strong> &mdash; chat AI z kontekstem pliku</li>
-          <li><strong>Cmd+I</strong> &mdash; tryb agenta &mdash; AI tworzy/edytuje pliki i uruchamia komendy</li>
-          <li>Możesz pisać po polsku, np. <em>&quot;Zmień kolor nagłówka na czerwony&quot;</em></li>
-        </ul>
       </Section>
 
       <Section title="GitHub &mdash; zapisywanie i publikowanie zmian">
@@ -352,7 +418,7 @@ export default function HelpGuide() {
           <li>Właściciel repo musi dodać Cię jako collaboratora (Settings &rarr; Collaborators)</li>
         </ul>
         <h3 style={s.h3}>Jak opublikować zmianę</h3>
-        <p style={s.p}>Po wprowadzeniu zmian w Cursorze, otwórz terminal i wpisz:</p>
+        <p style={s.p}>Po wprowadzeniu zmian otwórz terminal w folderze <span style={s.code}>ssk-app</span> i wpisz (albo poproś Claude Code / Cursor / Codex, żeby zrobił to za Ciebie):</p>
         <div style={s.sql}>
           git add .<br />
           git commit -m &quot;opis co zmieniłeś&quot;<br />
@@ -365,7 +431,7 @@ export default function HelpGuide() {
         <p style={s.p}>Zawsze najpierw pobierz najnowszą wersję:</p>
         <div style={s.sql}>git pull origin main</div>
         <p style={{ ...s.p, fontSize: 12, color: "#64748b" }}>
-          W Cursorze możesz też użyć wbudowanego panelu Git (ikona gałęzi po lewej) zamiast terminala.
+          W Cursorze możesz też użyć wbudowanego panelu Git (ikona gałęzi po lewej) zamiast terminala. W Claude Code i Codex wystarczy napisać np. <em>&quot;pobierz najnowsze zmiany z main&quot;</em>.
         </p>
       </Section>
 
